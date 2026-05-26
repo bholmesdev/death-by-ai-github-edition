@@ -91,7 +91,7 @@ export default function Home() {
         submit(
           {
             intent: "advance-reveal",
-            totalSegments: String(selectedSegments.paragraphs.length + 1),
+            totalSegments: String(selectedSegments.segments.length + 1),
           },
           { method: "post" },
         );
@@ -146,6 +146,8 @@ export default function Home() {
             prompt={game.currentScenario.prompt}
             submissionEndsAt={game.submissionEndsAt}
             joinUrl={game.joinUrl}
+            repoUrl={game.repoUrl}
+            scenarioNumber={game.currentScenario.number}
             pendingIntent={pendingIntent}
             roundNumber={game.roundNumber}
           />
@@ -366,15 +368,20 @@ function SubmittingView({
   prompt,
   submissionEndsAt,
   joinUrl,
+  repoUrl,
+  scenarioNumber,
   pendingIntent,
   roundNumber,
 }: {
   prompt: string;
   submissionEndsAt: number | null;
   joinUrl: string | null;
+  repoUrl: string;
+  scenarioNumber: number;
   pendingIntent: string | null;
   roundNumber: number;
 }) {
+  const repoHost = repoUrl.replace(/^https?:\/\//, "");
   const remaining = secondsLeft(submissionEndsAt);
 
   return (
@@ -398,7 +405,7 @@ function SubmittingView({
         {joinUrl ? (
           <div className="mt-10 flex flex-col items-center gap-4">
             <p className="text-sm uppercase tracking-[0.3em] text-white/70">
-              Scan to join via GitHub
+              Scan to respond on GitHub
             </p>
             <img
               alt="QR code linking to the GitHub response issue form"
@@ -407,6 +414,13 @@ function SubmittingView({
                 joinUrl,
               )}`}
             />
+            <div className="text-center">
+              <p className="font-display text-2xl text-white md:text-3xl">{repoHost}</p>
+              <p className="mt-1 text-sm uppercase tracking-[0.2em] text-white/70">
+                File a <span className="text-dba-yellow">Response</span> issue ·
+                tag <span className="text-dba-yellow">#{scenarioNumber}</span>
+              </p>
+            </div>
           </div>
         ) : null}
       </div>
@@ -442,7 +456,7 @@ function RevealView({
   readyResponses: ResponseVerdict[];
   revealedResponses: ResponseVerdict[];
   selectedResponse: ResponseVerdict | null;
-  selectedSegments: { paragraphs: string[]; footer: string } | null;
+  selectedSegments: { segments: string[]; footer: string } | null;
   visibleSegments: number;
   pendingIntent: string | null;
   roundNumber: number;
@@ -454,7 +468,7 @@ function RevealView({
         <RevealPlayer
           response={selectedResponse}
           visibleSegments={visibleSegments}
-          paragraphs={selectedSegments.paragraphs}
+          segments={selectedSegments.segments}
           footer={selectedSegments.footer}
           pendingIntent={pendingIntent}
         />
@@ -590,49 +604,49 @@ function CompletedGrid({ responses }: { responses: ResponseVerdict[] }) {
 function RevealPlayer({
   response,
   visibleSegments,
-  paragraphs,
+  segments,
   footer,
   pendingIntent,
 }: {
   response: ResponseVerdict;
   visibleSegments: number;
-  paragraphs: string[];
+  segments: string[];
   footer: string;
   pendingIntent: string | null;
 }) {
-  const shownParagraphs = paragraphs.slice(0, Math.min(visibleSegments, paragraphs.length));
-  const showFooter = visibleSegments > paragraphs.length;
+  const shownSegments = segments.slice(0, Math.min(visibleSegments, segments.length));
+  const showFooter = visibleSegments > segments.length;
   const isClosing = pendingIntent === "close-response";
   const isAdvancing = pendingIntent === "advance-reveal";
   const survived = response.verdict === "survived";
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-12">
-        <div className="mb-8 flex items-center gap-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-8">
+        <div className="mb-6 flex items-center gap-3">
           <img
             alt=""
-            className="size-16 rounded-full border-2 border-black/30"
+            className="size-12 rounded-full border-2 border-black/30"
             src={response.avatarUrl}
           />
           <div>
-            <p className="font-display text-2xl text-black">
+            <p className="font-display text-xl text-black">
               {response.playerName} tries to&hellip;
             </p>
-            <p className="text-sm uppercase tracking-wider text-black/60">
+            <p className="text-xs uppercase tracking-wider text-black/60">
               Issue #{response.issueNumber}
             </p>
           </div>
         </div>
 
-        <div className="relative flex-1 rounded-3xl bg-white p-8 text-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] md:p-12">
-          <div className="space-y-6 font-mono text-2xl leading-relaxed md:text-3xl">
-            {shownParagraphs.map((paragraph, i) => (
-              <p key={i}>{paragraph}</p>
+        <div className="relative flex-1 overflow-auto rounded-3xl bg-white p-6 text-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] md:p-8">
+          <div className="space-y-3 font-mono text-base leading-relaxed md:text-lg">
+            {shownSegments.map((sentence, i) => (
+              <p key={i}>{sentence}</p>
             ))}
             {showFooter ? (
               <p
-                className={`font-display mt-8 text-3xl md:text-4xl ${
+                className={`font-display mt-6 text-2xl md:text-3xl ${
                   survived ? "text-emerald-600" : "text-red-600"
                 }`}
               >
@@ -649,7 +663,7 @@ function RevealPlayer({
         </SecondaryButton>
         <Form method="post">
           <input type="hidden" name="intent" value="advance-reveal" />
-          <input type="hidden" name="totalSegments" value={paragraphs.length + 1} />
+          <input type="hidden" name="totalSegments" value={segments.length + 1} />
           <button
             type="submit"
             disabled={isAdvancing}

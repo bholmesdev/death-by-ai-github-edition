@@ -3,6 +3,7 @@ import {
   buildSuggestPromptUrl,
   getApprovedScenarios,
   getReadyResponses,
+  getRepoUrl,
 } from "./github.server";
 
 export type Scenario = {
@@ -54,6 +55,7 @@ export type GameSnapshot = {
   scores: PlayerScore[];
   joinUrl: string | null;
   suggestPromptUrl: string;
+  repoUrl: string;
 };
 
 type GameState = {
@@ -125,6 +127,7 @@ export async function getGameSnapshot(): Promise<GameSnapshot> {
     scores: [...state.scoresByPlayer.values()].sort((a, b) => b.total - a.total),
     joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario) : null,
     suggestPromptUrl: buildSuggestPromptUrl(),
+    repoUrl: getRepoUrl(),
   };
 }
 
