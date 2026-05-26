@@ -77,7 +77,7 @@ const state: GameState = {
   currentScenario: null,
   usedScenarioNumbers: new Set(),
   submissionEndsAt: null,
-  submissionDurationSeconds: 90,
+  submissionDurationSeconds: 240,
   reveal: {
     selectedResponseId: null,
     visibleSegments: 0,

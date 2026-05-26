@@ -1,4 +1,4 @@
-import { Form, useLoaderData, useSubmit } from "react-router";
+import { Form, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { useEffect } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
@@ -40,7 +40,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "start-game") await startGame();
   if (intent === "shuffle") await shuffleScenario();
   if (intent === "start-timer") {
-    startTimer(Number(formData.get("durationSeconds") ?? 90));
+    startTimer(Number(formData.get("durationSeconds") ?? 240));
   }
   if (intent === "start-reveal") startReveal();
   if (intent === "select-response") selectResponse(String(formData.get("responseId")));
@@ -56,11 +56,14 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Home() {
   const game = useLoaderData<typeof loader>();
+  const navigation = useNavigation();
   const submit = useSubmit();
+  const pendingIntent =
+    navigation.state !== "idle" ? String(navigation.formData?.get("intent") ?? "") : null;
   const selectedResponse = [...game.stragglers, ...game.readyResponses, ...game.revealedResponses].find(
     (response) => response.id === game.reveal.selectedResponseId,
   );
-  const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body, selectedResponse) : null;
+  const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body) : null;
 
   useEffect(() => {
     if (game.phase !== "submitting" && game.phase !== "revealing") return;
@@ -78,7 +81,7 @@ export default function Home() {
         submit(
           {
             intent: "advance-reveal",
-            totalSegments: String(selectedSegments.sentences.length + 1),
+            totalSegments: String(selectedSegments.paragraphs.length + 1),
           },
           { method: "post" },
         );
@@ -106,10 +109,10 @@ export default function Home() {
         <div className="flex gap-2">
           {game.phase === "confirming" || game.phase === "submitting" ? (
             <>
-              <ActionButton icon={<MingcuteShuffle2Line />} intent="shuffle">
+              <ActionButton icon={<MingcuteShuffle2Line />} intent="shuffle" pendingIntent={pendingIntent}>
                 Shuffle prompt
               </ActionButton>
-              <ActionButton icon={<MingcuteCloseLine />} intent="end-game">
+              <ActionButton icon={<MingcuteCloseLine />} intent="end-game" pendingIntent={pendingIntent}>
                 End game
               </ActionButton>
             </>
@@ -120,7 +123,7 @@ export default function Home() {
       {game.phase === "idle" ? (
         <section>
           <h2>Projector ready</h2>
-          <ActionButton icon={<MingcutePlayLine />} intent="start-game">
+          <ActionButton icon={<MingcutePlayLine />} intent="start-game" pendingIntent={pendingIntent}>
             Start game
           </ActionButton>
         </section>
@@ -129,7 +132,7 @@ export default function Home() {
       {game.phase === "ended" ? (
         <section>
           <h2>Game ended</h2>
-          <ActionButton icon={<MingcutePlayLine />} intent="start-game">
+          <ActionButton icon={<MingcutePlayLine />} intent="start-game" pendingIntent={pendingIntent}>
             Start new game
           </ActionButton>
         </section>
@@ -140,7 +143,7 @@ export default function Home() {
           <p>Confirm your scenario</p>
           <h2 className="my-10 text-4xl font-bold">{game.currentScenario.prompt}</h2>
           <div className="flex justify-center gap-3">
-            <ActionButton icon={<MingcuteShuffle2Line />} intent="shuffle">
+            <ActionButton icon={<MingcuteShuffle2Line />} intent="shuffle" pendingIntent={pendingIntent}>
               Shuffle
             </ActionButton>
             <Form method="post">
@@ -151,13 +154,18 @@ export default function Home() {
                   className="ml-2 w-20 border border-black p-2"
                   type="number"
                   min="60"
-                  max="120"
+                  max="300"
                   name="durationSeconds"
                   defaultValue={game.submissionDurationSeconds}
                 />
               </label>
-              <button className="ml-3 border border-black px-4 py-2" type="submit">
-                Accept and start timer
+              <button
+                className="ml-3 inline-flex items-center gap-2 border border-black px-4 py-2 disabled:opacity-60"
+                disabled={pendingIntent === "start-timer"}
+                type="submit"
+              >
+                {pendingIntent === "start-timer" ? <Spinner /> : null}
+                {pendingIntent === "start-timer" ? "Starting..." : "Accept and start timer"}
               </button>
             </Form>
           </div>
@@ -186,7 +194,7 @@ export default function Home() {
           {game.joinUrl ? (
             <p className="break-all border border-black p-4 text-left">{game.joinUrl}</p>
           ) : null}
-          <ActionButton icon={<MingcuteRightLine />} intent="start-reveal">
+          <ActionButton icon={<MingcuteRightLine />} intent="start-reveal" pendingIntent={pendingIntent}>
             Skip to reveal
           </ActionButton>
         </section>
@@ -196,18 +204,19 @@ export default function Home() {
         <section>
           <PromptHeader prompt={game.currentScenario.prompt} />
           {game.stragglers.length ? (
-            <ResponseStrip title="From previous round" responses={game.stragglers} />
+            <ResponseStrip title="From previous round" responses={game.stragglers} pendingIntent={pendingIntent} />
           ) : null}
           {selectedResponse && selectedSegments ? (
             <RevealPlayer
               response={selectedResponse}
               visibleSegments={game.reveal.visibleSegments}
-              sentences={selectedSegments.sentences}
+              paragraphs={selectedSegments.paragraphs}
               footer={selectedSegments.footer}
+              pendingIntent={pendingIntent}
             />
           ) : (
             <>
-              <ResponseStrip title="Ready stories" responses={game.readyResponses} />
+              <ResponseStrip title="Ready stories" responses={game.readyResponses} pendingIntent={pendingIntent} />
               {game.revealedResponses.length ? (
                 <CompletedStrip responses={game.revealedResponses} />
               ) : null}
@@ -215,7 +224,7 @@ export default function Home() {
           )}
           {!selectedResponse ? (
             <div className="mt-8 flex gap-2">
-              <ActionButton icon={<MingcuteRightLine />} intent="next-round">
+              <ActionButton icon={<MingcuteRightLine />} intent="next-round" pendingIntent={pendingIntent}>
                 Next round
               </ActionButton>
             </div>
@@ -229,20 +238,37 @@ export default function Home() {
 function ActionButton({
   intent,
   icon,
+  pendingIntent,
   children,
 }: {
   intent: string;
   icon?: React.ReactNode;
+  pendingIntent?: string | null;
   children: React.ReactNode;
 }) {
+  const isPending = pendingIntent === intent;
+
   return (
     <Form method="post">
       <input type="hidden" name="intent" value={intent} />
-      <button className="inline-flex items-center gap-2 border border-black px-4 py-2" type="submit">
-        {icon}
+      <button
+        className="inline-flex items-center gap-2 border border-black px-4 py-2 disabled:opacity-60"
+        disabled={isPending}
+        type="submit"
+      >
+        {isPending ? <Spinner /> : icon}
         {children}
       </button>
     </Form>
+  );
+}
+
+function Spinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block size-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+    />
   );
 }
 
@@ -255,7 +281,17 @@ function PromptHeader({ prompt }: { prompt: string }) {
   );
 }
 
-function ResponseStrip({ title, responses }: { title: string; responses: ResponseVerdict[] }) {
+function ResponseStrip({
+  title,
+  responses,
+  pendingIntent,
+}: {
+  title: string;
+  responses: ResponseVerdict[];
+  pendingIntent: string | null;
+}) {
+  const isPending = pendingIntent === "select-response";
+
   return (
     <section className="mt-6">
       <h3 className="mb-3 text-xl font-bold">{title}</h3>
@@ -268,8 +304,13 @@ function ResponseStrip({ title, responses }: { title: string; responses: Respons
               <img alt="" className="mb-3 size-12" src={response.avatarUrl} />
               <p className="font-bold">{response.playerName}</p>
               <p>Issue #{response.issueNumber}</p>
-              <button className="mt-3 border border-black px-3 py-1" type="submit">
-                Reveal
+              <button
+                className="mt-3 inline-flex items-center gap-2 border border-black px-3 py-1 disabled:opacity-60"
+                disabled={isPending}
+                type="submit"
+              >
+                {isPending ? <Spinner /> : null}
+                {isPending ? "Revealing..." : "Reveal"}
               </button>
             </Form>
           ))}
@@ -316,16 +357,20 @@ function Scoreboard({ scores }: { scores: PlayerScore[] }) {
 function RevealPlayer({
   response,
   visibleSegments,
-  sentences,
+  paragraphs,
   footer,
+  pendingIntent,
 }: {
   response: ResponseVerdict;
   visibleSegments: number;
-  sentences: string[];
+  paragraphs: string[];
   footer: string;
+  pendingIntent: string | null;
 }) {
-  const shownSentences = sentences.slice(0, Math.min(visibleSegments, sentences.length));
-  const showFooter = visibleSegments > sentences.length;
+  const shownParagraphs = paragraphs.slice(0, Math.min(visibleSegments, paragraphs.length));
+  const showFooter = visibleSegments > paragraphs.length;
+  const isClosing = pendingIntent === "close-response";
+  const isAdvancing = pendingIntent === "advance-reveal";
 
   return (
     <section className="mx-auto mt-10 flex min-h-[520px] max-w-4xl flex-col">
@@ -338,8 +383,8 @@ function RevealPlayer({
           </div>
         </div>
         <div className="space-y-4 text-2xl">
-          {shownSentences.map((sentence) => (
-            <p key={sentence}>{sentence}</p>
+          {shownParagraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
           ))}
           {showFooter ? <p className="font-bold">{footer}</p> : null}
         </div>
@@ -347,14 +392,24 @@ function RevealPlayer({
       <div className="mt-auto flex gap-2 pt-8">
         <Form method="post">
           <input type="hidden" name="intent" value="close-response" />
-          <button className="border border-black px-4 py-2" type="submit">
+          <button
+            className="inline-flex items-center gap-2 border border-black px-4 py-2 disabled:opacity-60"
+            disabled={isClosing}
+            type="submit"
+          >
+            {isClosing ? <Spinner /> : null}
             Back
           </button>
         </Form>
         <Form method="post">
           <input type="hidden" name="intent" value="advance-reveal" />
-          <input type="hidden" name="totalSegments" value={sentences.length + 1} />
-          <button className="border border-black px-4 py-2" type="submit">
+          <input type="hidden" name="totalSegments" value={paragraphs.length + 1} />
+          <button
+            className="inline-flex items-center gap-2 border border-black px-4 py-2 disabled:opacity-60"
+            disabled={isAdvancing}
+            type="submit"
+          >
+            {isAdvancing ? <Spinner /> : null}
             {showFooter ? "Close story" : "Next"}
           </button>
         </Form>

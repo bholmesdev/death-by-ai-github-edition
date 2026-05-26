@@ -25,7 +25,7 @@ type CacheEntry<T> = {
   value: T;
 };
 
-const defaultRepository = "bholmesdev/death-by-ai-github-edition";
+const defaultRepository = "warpdotdev-demos/death-by-ai-github-edition";
 const repository = process.env.GITHUB_REPOSITORY || process.env.WORKFLOW_CODE_REPOSITORY || defaultRepository;
 const [owner, repo] = repository.split("/");
 const apiBase = process.env.GITHUB_API_BASE_URL || "https://api.github.com";
@@ -137,6 +137,7 @@ async function getVerdictComment(issueNumber: number, verdict: Verdict) {
 }
 
 async function listIssues(labels: string[]) {
+  // TODO: follow GitHub pagination once the event repo can exceed 100 open issues.
   const params = new URLSearchParams({
     state: "open",
     labels: labels.join(","),
