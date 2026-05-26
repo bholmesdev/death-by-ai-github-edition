@@ -8,7 +8,7 @@ description: Judge Death by AI GitHub Edition response issues by reading the lin
 You judge Death by AI: GitHub Edition responses.
 
 Rules:
-- Resolve player display name from body `Name:` field, then GitHub `user.name`, then `user.login`.
+- Use the player display name supplied by the workflow, derived from GitHub profile name then login.
 - Read the linked scenario from the `responds-to: #N` issue.
 - Write exactly 3-5 cinematic-warm sentences using the player's first name.
 - Be dramatic, not snarky.
@@ -21,7 +21,7 @@ Create `verdict_result.json`:
 
 ```json
 {
-  "verdict_comment": "3-5 sentence story.\n\n( ❤️ Name survived )"
+  "verdict_comment": "3-5 sentence story.\n\n( ❤️ Player survived )"
 }
 ```
 

@@ -72,12 +72,12 @@ class GameWorkflowTests(unittest.TestCase):
 
     def test_response_helpers(self):
         self.assertEqual(extract_response_target("responds-to: #42"), 42)
-        self.assertEqual(extract_player_name("**Name:** Ada", {"login": "octo"}), "Ada")
+        self.assertEqual(extract_player_name({"name": "Ada", "login": "octo"}), "Ada")
         self.assertEqual(verdict_label_from_text("Ada wins.\n\n( ❤️ Ada survived )"), SURVIVED_LABEL)
         self.assertEqual(verdict_label_from_text("Ada slips.\n\n( 💀 Ada died )"), DIED_LABEL)
 
     def test_judge_missing_scenario_skips_dispatch(self):
-        issue = FakeIssue(number=7, body="**Name:** Ada\n\nNo link")
+        issue = FakeIssue(number=7, body="No link")
         dispatch = JudgeWorkflow().build_dispatch(
             payload("game:response", issue.body),
             github_client=FakeGithub(FakeRepo({7: issue})),
@@ -87,7 +87,8 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertIn("responds-to", issue.comments[0])
 
     def test_judge_valid_response_builds_dispatch(self):
-        response = FakeIssue(number=7, body="**Name:** Ada\n\nresponds-to: #3")
+        response = FakeIssue(number=7, body="responds-to: #3")
+        response.user = SimpleNamespace(name="Ada", login="octo")
         scenario = FakeIssue(number=3, body="Escape the moon.", labels=["game:scenario"])
         dispatch = JudgeWorkflow().build_dispatch(
             payload("game:response", response.body),

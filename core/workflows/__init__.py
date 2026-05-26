@@ -19,8 +19,6 @@ SURVIVED_LABEL = "verdict:survived"
 DIED_LABEL = "verdict:died"
 
 RESPONDS_TO_RE = re.compile(r"responds-to:\s*#?(\d+)", re.IGNORECASE)
-NAME_RE = re.compile(r"\*\*?\s*Name\s*:\s*\*?\*?\s*([^\n\r]*)", re.IGNORECASE)
-
 
 def _owner_repo(payload: Mapping[str, Any]) -> tuple[str, str, str]:
     full_name = str(((payload.get("repository") or {}).get("full_name")) or "")
@@ -61,10 +59,7 @@ def extract_response_target(body: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def extract_player_name(body: str, user: Any | None = None) -> str:
-    match = NAME_RE.search(body or "")
-    if match and match.group(1).strip():
-        return match.group(1).strip()
+def extract_player_name(user: Any | None = None) -> str:
     if isinstance(user, dict):
         name = user.get("name")
         login = user.get("login")
@@ -207,7 +202,7 @@ class JudgeWorkflow(BaseGameWorkflow):
             return None
 
         user = getattr(response_issue, "user", None) or issue.get("user") or {}
-        player_name = extract_player_name(body, user)
+        player_name = extract_player_name(user)
         prompt = (
             f"Judge response issue #{issue_number} in {owner}/{repo}.\n\n"
             f"Player: {player_name}\n"
@@ -223,7 +218,7 @@ class JudgeWorkflow(BaseGameWorkflow):
             title=f"Judge response #{issue_number}",
             prompt=prompt,
             subset={"scenario_number": target_number, "player_name": player_name},
-            requester=str(user.get("login") or ""),
+            requester=str((user.get("login") if isinstance(user, dict) else getattr(user, "login", "")) or ""),
             start_line="Judging this survival plan.",
         )
 

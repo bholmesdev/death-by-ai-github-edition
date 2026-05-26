@@ -26,8 +26,7 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
    │                                                                  │
    │  2. Scenario shows on the TV with a QR code + countdown timer.   │
    │     Attendees scan the QR — it deep-links to GitHub's new-issue  │
-   │     page with `responds-to: #N`, `game:response` label, and a    │
-   │     "Name" field pre-filled in the body.                         │
+   │     page with `responds-to: #N` and `game:response` label.       │
    │                                                                  │
    │  3. Each response issue triggers the judge agent. The agent      │
    │     reads the linked scenario + the response, writes a 3-5       │
@@ -77,10 +76,10 @@ https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?templa
 Response QR for scenario `#N`:
 
 ```text
-https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A%20&body=**Name%3A**%0A%0Aresponds-to%3A%20%23N%0A%0AMy%20survival%20plan%3A%0A
+https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A%20&body=responds-to%3A%20%23N%0A%0AMy%20survival%20plan%3A%0A
 ```
 
-Replace `N` with the scenario issue number. For prefilled names, URL-encode the value after `**Name:**`.
+Replace `N` with the scenario issue number.
 
 ## P0 deploy
 
