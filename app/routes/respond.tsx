@@ -1,10 +1,6 @@
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
-import {
-  buildGitHubJoinUrl,
-  createResponseIssue,
-  getScenario,
-} from "../github.server";
+import { createResponseIssue, getScenario } from "../github.server";
 import {
   cleanInput,
   enforceSubmissionRateLimit,
@@ -31,7 +27,6 @@ export async function loader({ params }: Route.LoaderArgs) {
   return {
     scenarioNumber,
     scenario: await getScenario(scenarioNumber),
-    githubFallbackUrl: buildGitHubJoinUrl(scenarioNumber),
   };
 }
 
@@ -58,12 +53,12 @@ export async function action({ request, params }: Route.ActionArgs): Promise<Sub
     return { ok: true, issueNumber: issue.number, issueUrl: issue.url };
   } catch (error) {
     console.error("Could not create response issue:", error);
-    return { ok: false, error: "Could not create the GitHub issue. Try the GitHub fallback link." };
+    return { ok: false, error: "Could not create the GitHub issue. Please try again." };
   }
 }
 
 export default function Respond() {
-  const { scenarioNumber, scenario, githubFallbackUrl } = useLoaderData<typeof loader>();
+  const { scenarioNumber, scenario } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
@@ -82,11 +77,22 @@ export default function Respond() {
       )}
 
       {result?.ok ? (
-        <SuccessResult
-          issueNumber={result.issueNumber}
-          issueUrl={result.issueUrl}
-          message="Your response is in GitHub. Watch the issue for the Oz judge agent's progress comment and verdict."
-        />
+        <div className="space-y-4">
+          <SuccessResult
+            issueNumber={result.issueNumber}
+            issueUrl={result.issueUrl}
+            message="Your response is in GitHub. Watch the issue for the Oz judge agent's progress comment and verdict."
+          />
+          <a
+            className="block rounded-2xl bg-white/10 p-5 text-white transition hover:bg-white/15"
+            href="/suggest"
+          >
+            <p className="font-display text-xl text-dba-yellow">
+              In the meantime, you can suggest the next scenario.
+            </p>
+            <p className="mt-2 text-sm text-white/75">Tap here to submit one.</p>
+          </a>
+        </div>
       ) : (
         <SubmissionForm
           textName="response"
@@ -97,8 +103,6 @@ export default function Respond() {
           disabled={isSubmitting}
         />
       )}
-
-      <FallbackLink href={githubFallbackUrl}>Open GitHub form instead</FallbackLink>
     </SubmissionShell>
   );
 }
@@ -187,13 +191,5 @@ function SuccessResult({
         Watch on GitHub
       </a>
     </div>
-  );
-}
-
-function FallbackLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a className="mt-6 inline-block text-sm text-white/70 underline" href={href}>
-      {children}
-    </a>
   );
 }

@@ -96,9 +96,6 @@ export default function Home() {
           { method: "post" },
         );
       }
-      if (event.key.toLowerCase() === "r") {
-        submit({ intent: "shuffle" }, { method: "post" });
-      }
       if (event.key.toLowerCase() === "n" && game.phase === "revealing") {
         submit({ intent: "next-round" }, { method: "post" });
       }
@@ -190,10 +187,6 @@ function IdleView({ pendingIntent }: { pendingIntent: string | null }) {
           <MingcutePlayLine className="text-2xl" /> Start game
         </PrimaryButton>
       </div>
-
-      <p className="mt-12 text-sm uppercase tracking-[0.3em] text-white/60">
-        Projector ready · waiting for MC
-      </p>
     </div>
   );
 }
@@ -293,16 +286,11 @@ function ConfirmView({
           >
             Suggest prompt
           </a>
-          <Form method="post">
-            <input type="hidden" name="intent" value="shuffle" />
-            <button
-              type="submit"
-              disabled={pendingIntent === "shuffle"}
-              className="rounded-full bg-dba-yellow px-6 py-3 font-medium text-dba-ink hover:brightness-110 disabled:opacity-60"
-            >
-              {pendingIntent === "shuffle" ? "Checking..." : "Check again"}
-            </button>
-          </Form>
+        </div>
+        <div className="mt-10">
+          <SecondaryButton intent="end-game" pendingIntent={pendingIntent} compact>
+            <MingcuteCloseLine /> End game
+          </SecondaryButton>
         </div>
       </div>
     );
@@ -351,14 +339,36 @@ function ConfirmView({
         </Form>
       </div>
 
-      <div className="mt-16 flex w-full max-w-5xl justify-between text-sm uppercase tracking-[0.3em] text-white/60">
-        <span>R to reshuffle</span>
+      <div className="mt-16 w-full max-w-5xl">
+        <GameFooter pendingIntent={pendingIntent} scores={scores} />
+      </div>
+    </div>
+  );
+}
+
+function GameFooter({
+  children,
+  pendingIntent,
+  scores,
+  light = false,
+}: {
+  children?: React.ReactNode;
+  pendingIntent: string | null;
+  scores: PlayerScore[];
+  light?: boolean;
+}) {
+  return (
+    <BottomBar light={light}>
+      <div className="flex min-w-0 flex-1 justify-start">
         <ScoreStrip scores={scores} />
-        <SecondaryButton intent="end-game" pendingIntent={pendingIntent} compact>
+      </div>
+      {children ? <div className="flex shrink-0 justify-center gap-3">{children}</div> : null}
+      <div className="flex flex-1 justify-end">
+        <SecondaryButton intent="end-game" pendingIntent={pendingIntent} compact light={light}>
           <MingcuteCloseLine /> End game
         </SecondaryButton>
       </div>
-    </div>
+    </BottomBar>
   );
 }
 
@@ -420,14 +430,11 @@ function SubmittingView({
         ) : null}
       </div>
 
-      <BottomBar>
-        <SecondaryButton intent="shuffle" pendingIntent={pendingIntent} compact>
-          <MingcuteShuffle2Line /> Reshuffle
-        </SecondaryButton>
+      <GameFooter pendingIntent={pendingIntent} scores={[]}>
         <PrimaryButton intent="start-reveal" pendingIntent={pendingIntent}>
           <MingcuteRightLine className="text-2xl" /> Skip to reveal
         </PrimaryButton>
-      </BottomBar>
+      </GameFooter>
     </div>
   );
 }
@@ -503,12 +510,11 @@ function RevealView({
         ) : null}
       </div>
 
-      <BottomBar>
-        <ScoreStrip scores={scores} />
+      <GameFooter pendingIntent={pendingIntent} scores={scores}>
         <PrimaryButton intent="next-round" pendingIntent={pendingIntent}>
           <MingcuteRightLine className="text-2xl" /> Next round
         </PrimaryButton>
-      </BottomBar>
+      </GameFooter>
     </div>
   );
 }
@@ -635,7 +641,7 @@ function RevealPlayer({
         </div>
 
         <div className="relative flex-1 overflow-auto rounded-3xl bg-white p-6 text-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] md:p-8">
-          <div className="space-y-3 font-mono text-base leading-relaxed md:text-lg">
+          <div className="space-y-3 text-base leading-relaxed md:text-lg">
             {shownSegments.map((sentence, i) => (
               <p key={i}>{sentence}</p>
             ))}
@@ -652,7 +658,7 @@ function RevealPlayer({
         </div>
       </div>
 
-      <BottomBar light>
+      <GameFooter pendingIntent={pendingIntent} scores={[]} light>
         <SecondaryButton intent="close-response" pendingIntent={pendingIntent} light compact>
           {isClosing ? <Spinner /> : null} Back
         </SecondaryButton>
@@ -668,7 +674,7 @@ function RevealPlayer({
             {showFooter ? "Close story" : "Continue"}
           </button>
         </Form>
-      </BottomBar>
+      </GameFooter>
     </div>
   );
 }
@@ -713,21 +719,18 @@ function BottomBar({
 }
 
 function ScoreStrip({ scores }: { scores: PlayerScore[] }) {
-  if (!scores.length) {
-    return <span className="text-xs uppercase tracking-[0.3em] text-white/50">No scores yet</span>;
-  }
+  if (!scores.length) return null;
 
   const top = scores.slice(0, 4);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-start gap-2">
       {top.map((score) => (
         <span
           key={score.playerName}
-          className="rounded-full bg-white/10 px-3 py-1 text-sm"
+          className="rounded-full bg-white px-3 py-1 text-sm font-medium text-dba-ink"
         >
-          <span className="font-display text-dba-yellow mr-2">{score.total}</span>
-          {score.playerName}
+          {score.playerName} <span className="ml-1 font-semibold">{score.total}</span>
         </span>
       ))}
     </div>

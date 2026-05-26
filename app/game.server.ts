@@ -144,12 +144,11 @@ export async function startGame() {
 }
 
 export async function shuffleScenario() {
-  if (state.phase !== "confirming" && state.phase !== "submitting") return;
+  if (state.phase !== "confirming") return;
   const next = await pickScenario(state.usedScenarioNumbers, state.currentScenario?.number);
   if (!next && !state.currentScenario) return;
   if (next) state.currentScenario = next;
   resetRoundState();
-  state.phase = "confirming";
 }
 
 export function startTimer(durationSeconds: number) {

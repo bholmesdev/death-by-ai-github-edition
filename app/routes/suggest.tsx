@@ -1,9 +1,6 @@
-import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Form, useActionData, useNavigation } from "react-router";
 
-import {
-  buildGitHubSuggestPromptUrl,
-  createScenarioIssue,
-} from "../github.server";
+import { createScenarioIssue } from "../github.server";
 import {
   cleanInput,
   enforceSubmissionRateLimit,
@@ -19,12 +16,6 @@ export function meta({}: Route.MetaArgs) {
     { title: "Suggest a scenario · Death by AI" },
     { name: "description", content: "Suggest a Death by AI scenario." },
   ];
-}
-
-export async function loader() {
-  return {
-    githubFallbackUrl: buildGitHubSuggestPromptUrl(),
-  };
 }
 
 export async function action({ request }: Route.ActionArgs): Promise<SubmissionResult> {
@@ -44,12 +35,11 @@ export async function action({ request }: Route.ActionArgs): Promise<SubmissionR
     return { ok: true, issueNumber: issue.number, issueUrl: issue.url };
   } catch (error) {
     console.error("Could not create scenario issue:", error);
-    return { ok: false, error: "Could not create the GitHub issue. Try the GitHub fallback link." };
+    return { ok: false, error: "Could not create the GitHub issue. Please try again." };
   }
 }
 
 export default function Suggest() {
-  const { githubFallbackUrl } = useLoaderData<typeof loader>();
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
@@ -65,10 +55,9 @@ export default function Suggest() {
         <div className="mt-8">
           {result?.ok ? (
             <div className="rounded-2xl bg-white p-5 text-dba-ink">
-              <p className="font-display text-2xl">Issue #{result.issueNumber} created</p>
+              <p className="font-display text-2xl">Thanks — scenario submitted</p>
               <p className="mt-3 text-sm">
-                Your scenario is in GitHub. Watch the issue for the Oz moderator agent's progress
-                comment and decision.
+                Watch issue #{result.issueNumber} to see the Oz triage agent review it.
               </p>
               <a
                 className="mt-5 inline-block rounded-full bg-dba-purple-500 px-5 py-3 text-white"
@@ -115,10 +104,6 @@ export default function Suggest() {
               </button>
             </Form>
           )}
-
-          <a className="mt-6 inline-block text-sm text-white/70 underline" href={githubFallbackUrl}>
-            Open GitHub form instead
-          </a>
         </div>
       </div>
     </main>
