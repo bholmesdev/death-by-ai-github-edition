@@ -3,6 +3,8 @@ description: Submit your survival plan.
 title: "Response: "
 labels: ["game:response"]
 body:
+  # Keep these in one textarea so the created issue body preserves the exact
+  # parseable `**Name:**` and `responds-to:` lines.
   - type: textarea
     id: response
     attributes:
