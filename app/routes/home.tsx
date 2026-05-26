@@ -29,7 +29,7 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export function loader() {
+export async function loader() {
   return getGameSnapshot();
 }
 
@@ -37,8 +37,8 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
-  if (intent === "start-game") startGame();
-  if (intent === "shuffle") shuffleScenario();
+  if (intent === "start-game") await startGame();
+  if (intent === "shuffle") await shuffleScenario();
   if (intent === "start-timer") {
     startTimer(Number(formData.get("durationSeconds") ?? 90));
   }
@@ -48,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
     advanceReveal(Number(formData.get("totalSegments") ?? 0));
   }
   if (intent === "close-response") closeResponse();
-  if (intent === "next-round") nextRound();
+  if (intent === "next-round") await nextRound();
   if (intent === "end-game") endGame();
 
   return getGameSnapshot();
@@ -63,10 +63,10 @@ export default function Home() {
   const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body, selectedResponse) : null;
 
   useEffect(() => {
-    if (game.phase !== "submitting") return;
+    if (game.phase !== "submitting" && game.phase !== "revealing") return;
     const interval = window.setInterval(() => {
       submit({ intent: "noop" }, { method: "post" });
-    }, 1000);
+    }, game.phase === "submitting" ? 1000 : 3000);
     return () => window.clearInterval(interval);
   }, [game.phase, submit]);
 
