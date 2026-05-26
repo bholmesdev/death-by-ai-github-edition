@@ -92,7 +92,7 @@ const state: GameState = {
   responsesById: new Map(),
 };
 
-export async function getGameSnapshot(): Promise<GameSnapshot> {
+export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
   expireTimerIfNeeded();
 
   const currentScenarioNumber = state.currentScenario?.number;
@@ -125,8 +125,8 @@ export async function getGameSnapshot(): Promise<GameSnapshot> {
     stragglers,
     reveal: state.reveal,
     scores: [...state.scoresByPlayer.values()].sort((a, b) => b.total - a.total),
-    joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario) : null,
-    suggestPromptUrl: buildSuggestPromptUrl(),
+    joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario, origin) : null,
+    suggestPromptUrl: buildSuggestPromptUrl(origin),
     repoUrl: getRepoUrl(),
   };
 }

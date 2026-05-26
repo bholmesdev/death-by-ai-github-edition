@@ -39,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     const { getDemoSnapshot } = await import("../demo-snapshots");
     return getDemoSnapshot(demo);
   }
-  return getGameSnapshot();
+  return getGameSnapshot(url.origin);
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -60,7 +60,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "next-round") await nextRound();
   if (intent === "end-game") endGame();
 
-  return getGameSnapshot();
+  return getGameSnapshot(new URL(request.url).origin);
 }
 
 export default function Home() {
@@ -400,12 +400,11 @@ function SubmittingView({
         >
           {remaining}
         </p>
-        <p className="text-sm uppercase tracking-[0.3em] text-white/70">seconds left</p>
 
         {joinUrl ? (
           <div className="mt-10 flex flex-col items-center gap-4">
             <p className="text-sm uppercase tracking-[0.3em] text-white/70">
-              Scan to respond on GitHub
+              Scan to respond
             </p>
             <img
               alt="QR code linking to the GitHub response issue form"
@@ -415,11 +414,7 @@ function SubmittingView({
               )}`}
             />
             <div className="text-center">
-              <p className="font-display text-2xl text-white md:text-3xl">{repoHost}</p>
-              <p className="mt-1 text-sm uppercase tracking-[0.2em] text-white/70">
-                File a <span className="text-dba-yellow">Response</span> issue ·
-                tag <span className="text-dba-yellow">#{scenarioNumber}</span>
-              </p>
+              <p className="font-display text-2xl text-white md:text-3xl">{joinUrl}</p>
             </div>
           </div>
         ) : null}

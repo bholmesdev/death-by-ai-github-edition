@@ -86,8 +86,8 @@ export async function getResponseCountsByScenario(): Promise<Map<number, number>
   return new Map(counts);
 }
 
-export function buildJoinUrl(scenario: Scenario) {
-  return `/respond/${scenario.number}`;
+export function buildJoinUrl(scenario: Scenario, origin?: string) {
+  return appUrl(`/respond/${scenario.number}`, origin);
 }
 
 export function buildGitHubJoinUrl(scenarioNumber: number) {
@@ -108,8 +108,8 @@ export function getRepoUrl() {
   return `${webBase}/${owner}/${repo}`;
 }
 
-export function buildSuggestPromptUrl() {
-  return "/suggest";
+export function buildSuggestPromptUrl(origin?: string) {
+  return appUrl("/suggest", origin);
 }
 
 export function buildGitHubSuggestPromptUrl() {
@@ -398,4 +398,10 @@ function normalizePrivateKey(privateKey: string) {
 function truncateForTitle(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > 70 ? `${normalized.slice(0, 67)}...` : normalized;
+}
+
+function appUrl(path: string, origin?: string) {
+  const appOrigin = origin || process.env.PUBLIC_APP_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  if (!appOrigin) return path;
+  return new URL(path, appOrigin.startsWith("http") ? appOrigin : `https://${appOrigin}`).toString();
 }
