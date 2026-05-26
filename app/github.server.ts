@@ -84,15 +84,21 @@ export async function getResponseCountsByScenario(): Promise<Map<number, number>
 }
 
 export function buildJoinUrl(scenario: Scenario) {
-  const body = `responds-to: #${scenario.number}\n\nName:\n\nSurvival plan:\n`;
+  // Pre-fill the issue form's `response` textarea (matches `id:` in response.yml).
+  // GitHub ignores `body=` when `template=` is set, so we must use the field id.
+  const response = `responds-to: #${scenario.number}\n\nMy survival plan:\n`;
   const params = new URLSearchParams({
     template: "response.yml",
     labels: "game:response",
-    title: "Response: ",
-    body,
+    title: `Response to #${scenario.number}`,
+    response,
   });
 
   return `${webBase}/${owner}/${repo}/issues/new?${params}`;
+}
+
+export function getRepoUrl() {
+  return `${webBase}/${owner}/${repo}`;
 }
 
 export function buildSuggestPromptUrl() {

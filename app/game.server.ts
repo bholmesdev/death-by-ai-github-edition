@@ -3,6 +3,7 @@ import {
   buildSuggestPromptUrl,
   getApprovedScenarios,
   getReadyResponses,
+  getRepoUrl,
 } from "./github.server";
 
 export type Scenario = {
@@ -54,6 +55,7 @@ export type GameSnapshot = {
   scores: PlayerScore[];
   joinUrl: string | null;
   suggestPromptUrl: string;
+  repoUrl: string;
 };
 
 type GameState = {
@@ -125,6 +127,7 @@ export async function getGameSnapshot(): Promise<GameSnapshot> {
     scores: [...state.scoresByPlayer.values()].sort((a, b) => b.total - a.total),
     joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario) : null,
     suggestPromptUrl: buildSuggestPromptUrl(),
+    repoUrl: getRepoUrl(),
   };
 }
 
@@ -142,7 +145,9 @@ export async function startGame() {
 
 export async function shuffleScenario() {
   if (state.phase !== "confirming" && state.phase !== "submitting") return;
-  state.currentScenario = await pickScenario(state.usedScenarioNumbers, state.currentScenario?.number);
+  const next = await pickScenario(state.usedScenarioNumbers, state.currentScenario?.number);
+  if (!next && !state.currentScenario) return;
+  if (next) state.currentScenario = next;
   resetRoundState();
   state.phase = "confirming";
 }
