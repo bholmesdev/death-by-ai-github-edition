@@ -17,6 +17,8 @@ REJECTED_LABEL = "scenario:rejected"
 NO_SCENARIO_LABEL = "error:no-scenario"
 SURVIVED_LABEL = "verdict:survived"
 DIED_LABEL = "verdict:died"
+SCENARIO_TERMINAL_LABELS = frozenset({APPROVED_LABEL, REJECTED_LABEL})
+JUDGE_TERMINAL_LABELS = frozenset({SURVIVED_LABEL, DIED_LABEL, NO_SCENARIO_LABEL})
 
 RESPONDS_TO_RE = re.compile(r"responds-to:\s*#?(\d+)", re.IGNORECASE)
 
@@ -91,6 +93,7 @@ class BaseGameWorkflow:
     skill_name: str
     artifact_name: str
     config_name = "death-by-ai"
+    terminal_labels: frozenset[str] = frozenset()
 
     def load_artifact(self, run_id: str) -> dict[str, Any]:
         from oz.artifacts import poll_for_artifact
@@ -137,14 +140,26 @@ class BaseGameWorkflow:
             ),
         )
 
+    def is_complete(self, repo_handle: Any, *, context: Mapping[str, Any]) -> bool:
+        if not self.terminal_labels:
+            return False
+        issue_number = int(context.get("issue_number") or 0)
+        if issue_number <= 0:
+            return False
+        issue = repo_handle.get_issue(issue_number)
+        return bool(self.terminal_labels.intersection(_labels(issue)))
+
 
 class ScenarioModeratorWorkflow(BaseGameWorkflow):
     workflow = WORKFLOW_SCENARIO_MODERATOR
     skill_name = "scenario-moderator"
     artifact_name = "scenario_moderation_result.json"
+    terminal_labels = SCENARIO_TERMINAL_LABELS
 
     def build_dispatch(self, payload: Mapping[str, Any], *, github_client: Any, workspace_path: Any = None) -> WorkflowDispatch:
         issue = _issue(payload)
+        if self.terminal_labels.intersection(_labels(issue)):
+            return None
         issue_number = int(issue.get("number") or 0)
         user = issue.get("user") or {}
         owner, repo, full_name = _owner_repo(payload)
@@ -180,9 +195,12 @@ class JudgeWorkflow(BaseGameWorkflow):
     workflow = WORKFLOW_DEATH_BY_AI_JUDGE
     skill_name = "death-by-ai-judge"
     artifact_name = "verdict_result.json"
+    terminal_labels = JUDGE_TERMINAL_LABELS
 
     def build_dispatch(self, payload: Mapping[str, Any], *, github_client: Any, workspace_path: Any = None) -> WorkflowDispatch | None:
         issue = _issue(payload)
+        if self.terminal_labels.intersection(_labels(issue)):
+            return None
         issue_number = int(issue.get("number") or 0)
         body = str(issue.get("body") or "")
         target_number = extract_response_target(body)

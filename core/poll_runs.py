@@ -85,6 +85,12 @@ class NonTerminalHandler(Protocol):
     def __call__(self, *, state: RunState, run: Any) -> None: ...
 
 
+class CompletionChecker(Protocol):
+    """Return True when persisted state is already reflected on GitHub."""
+
+    def __call__(self, *, state: RunState) -> bool: ...
+
+
 @dataclass(frozen=True)
 class WorkflowHandlers:
     """Per-workflow handlers used by :func:`drain_in_flight_runs`."""
@@ -93,6 +99,7 @@ class WorkflowHandlers:
     result_applier: ResultApplier
     failure_handler: FailureHandler | None = None
     non_terminal_handler: NonTerminalHandler | None = None
+    completion_checker: CompletionChecker | None = None
 
 
 @dataclass(frozen=True)
@@ -206,6 +213,23 @@ def _process_one(
             store=store,
             reason=reason,
         )
+
+    if handler.completion_checker is not None:
+        try:
+            if handler.completion_checker(state=state):
+                delete_run_state(store, state.run_id)
+                return DrainOutcome(
+                    run_id=state.run_id,
+                    workflow=state.workflow,
+                    state="ALREADY_APPLIED",
+                    applied=True,
+                )
+        except Exception:
+            logger.exception(
+                "completion_checker for run %s (%s) raised; continuing poll",
+                state.run_id,
+                state.workflow,
+            )
 
     try:
         run = retriever.retrieve(state.run_id)

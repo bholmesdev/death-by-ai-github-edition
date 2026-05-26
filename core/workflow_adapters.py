@@ -192,9 +192,15 @@ def handlers_for_workflow(
         progress = workflow.progress_for_state(repo_handle, state=state)
         record_session_link_safely(progress, run)
 
+    def completion_checker(*, state: RunState) -> bool:
+        client = _client_factory(state.installation_id, github_client_factory)
+        repo_handle = client.get_repo(state.repo)
+        return workflow.is_complete(repo_handle, context=state.payload_subset)
+
     return WorkflowHandlers(
         artifact_loader=loader,
         result_applier=applier,
         failure_handler=failure,
         non_terminal_handler=non_terminal,
+        completion_checker=completion_checker,
     )
