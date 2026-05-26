@@ -4,7 +4,10 @@ import unittest
 from types import SimpleNamespace
 
 from core.routing import WORKFLOW_DEATH_BY_AI_JUDGE, WORKFLOW_SCENARIO_MODERATOR, route_event
+from core.poll_runs import WorkflowHandlers, drain_in_flight_runs
+from core.state import InMemoryStateStore, RunState, save_run_state
 from core.workflows import (
+    APPROVED_LABEL,
     DIED_LABEL,
     NO_SCENARIO_LABEL,
     SURVIVED_LABEL,
@@ -30,6 +33,7 @@ class FakeIssue:
 
     def add_to_labels(self, *labels):
         self.added_labels.extend(labels)
+        self.labels.extend(SimpleNamespace(name=name) for name in labels)
 
 
 class FakeRepo:
@@ -51,6 +55,7 @@ class FakeGithub:
 
 
 def payload(label, body="", number=7):
+    labels = label if isinstance(label, list) else [label]
     return {
         "action": "opened",
         "repository": {"full_name": "owner/repo"},
@@ -59,7 +64,7 @@ def payload(label, body="", number=7):
             "number": number,
             "title": "Title",
             "body": body,
-            "labels": [{"name": label}],
+            "labels": [{"name": name} for name in labels],
             "user": {"login": "octo", "name": "Octavia"},
         },
     }
@@ -85,6 +90,56 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertIsNone(dispatch)
         self.assertIn(NO_SCENARIO_LABEL, issue.added_labels)
         self.assertIn("responds-to", issue.comments[0])
+
+    def test_completed_scenario_skips_dispatch(self):
+        issue = FakeIssue(number=9, body="Fog rolls in.", labels=["game:scenario", APPROVED_LABEL])
+        dispatch = ScenarioModeratorWorkflow().build_dispatch(
+            payload(["game:scenario", APPROVED_LABEL], issue.body, number=9),
+            github_client=FakeGithub(FakeRepo({9: issue})),
+        )
+        self.assertIsNone(dispatch)
+
+    def test_completed_response_skips_dispatch(self):
+        issue = FakeIssue(number=9, body="responds-to: #3", labels=["game:response", SURVIVED_LABEL])
+        dispatch = JudgeWorkflow().build_dispatch(
+            payload(["game:response", SURVIVED_LABEL], issue.body, number=9),
+            github_client=FakeGithub(FakeRepo({9: issue})),
+        )
+        self.assertIsNone(dispatch)
+
+    def test_cron_drops_state_when_issue_already_completed(self):
+        store = InMemoryStateStore()
+        state = RunState(
+            run_id="run-1",
+            workflow=WORKFLOW_SCENARIO_MODERATOR,
+            repo="owner/repo",
+            installation_id=123,
+            payload_subset={"issue_number": 9},
+        )
+        save_run_state(store, state)
+
+        class Retriever:
+            calls = 0
+
+            def retrieve(self, run_id):
+                self.calls += 1
+                return SimpleNamespace(state="RUNNING")
+
+        retriever = Retriever()
+        outcomes = drain_in_flight_runs(
+            store=store,
+            retriever=retriever,
+            handlers={
+                WORKFLOW_SCENARIO_MODERATOR: WorkflowHandlers(
+                    artifact_loader=lambda run_id: {},
+                    result_applier=lambda **kwargs: None,
+                    completion_checker=lambda *, state: True,
+                )
+            },
+        )
+
+        self.assertEqual(outcomes[0].state, "ALREADY_APPLIED")
+        self.assertEqual(retriever.calls, 0)
 
     def test_judge_valid_response_builds_dispatch(self):
         response = FakeIssue(number=7, body="responds-to: #3")
