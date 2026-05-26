@@ -17,13 +17,17 @@
     "react-router": "7.15.1"
   },
   "devDependencies": {
+    "@iconify-json/mingcute": "^1.2.7",
     "@react-router/dev": "7.15.1",
+    "@svgr/core": "^8.1.0",
+    "@svgr/plugin-jsx": "^8.1.0",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^22",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
+    "unplugin-icons": "^23.0.1",
     "vite": "^8.0.3"
   }
 }
