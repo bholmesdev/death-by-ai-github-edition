@@ -1,9 +1,12 @@
+import { createSign } from "node:crypto";
+
 import type { ResponseVerdict, Scenario, Verdict } from "./game.server";
 
 type GitHubIssue = {
   number: number;
   title: string;
   body: string | null;
+  html_url: string;
   created_at: string;
   user: {
     login: string;
@@ -84,13 +87,17 @@ export async function getResponseCountsByScenario(): Promise<Map<number, number>
 }
 
 export function buildJoinUrl(scenario: Scenario) {
+  return `/respond/${scenario.number}`;
+}
+
+export function buildGitHubJoinUrl(scenarioNumber: number) {
   // Pre-fill the issue form's `response` textarea (matches `id:` in response.yml).
   // GitHub ignores `body=` when `template=` is set, so we must use the field id.
-  const response = `responds-to: #${scenario.number}\n\nMy survival plan:\n`;
+  const response = `responds-to: #${scenarioNumber}\n\nMy survival plan:\n`;
   const params = new URLSearchParams({
     template: "response.yml",
     labels: "game:response",
-    title: `Response to #${scenario.number}`,
+    title: `Response to #${scenarioNumber}`,
     response,
   });
 
@@ -102,6 +109,10 @@ export function getRepoUrl() {
 }
 
 export function buildSuggestPromptUrl() {
+  return "/suggest";
+}
+
+export function buildGitHubSuggestPromptUrl() {
   const params = new URLSearchParams({
     template: "scenario.yml",
     labels: "game:scenario",
@@ -110,6 +121,46 @@ export function buildSuggestPromptUrl() {
   });
 
   return `${webBase}/${owner}/${repo}/issues/new?${params}`;
+}
+
+export type CreatedIssue = {
+  number: number;
+  url: string;
+};
+
+export async function getScenario(scenarioNumber: number): Promise<Scenario | null> {
+  const scenarios = await getApprovedScenarios();
+  return scenarios.find((scenario) => scenario.number === scenarioNumber) ?? null;
+}
+
+export async function createResponseIssue(input: {
+  scenarioNumber: number;
+  displayName: string;
+  response: string;
+}): Promise<CreatedIssue> {
+  return createIssue({
+    title: `Response to #${input.scenarioNumber} from ${input.displayName}`,
+    body: [
+      `responds-to: #${input.scenarioNumber}`,
+      "",
+      `Player: ${input.displayName}`,
+      "",
+      "My survival plan:",
+      input.response,
+    ].join("\n"),
+    labels: ["game:response"],
+  });
+}
+
+export async function createScenarioIssue(input: {
+  displayName: string;
+  prompt: string;
+}): Promise<CreatedIssue> {
+  return createIssue({
+    title: `Scenario: ${truncateForTitle(input.prompt)}`,
+    body: ["Prompt:", input.prompt, "", `Suggested by: ${input.displayName}`].join("\n"),
+    labels: ["game:scenario"],
+  });
 }
 
 async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | null> {
@@ -173,6 +224,94 @@ async function request<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function createIssue(input: {
+  title: string;
+  body: string;
+  labels: string[];
+}): Promise<CreatedIssue> {
+  const created = await writeRequest<GitHubIssue>(`/repos/${owner}/${repo}/issues`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+  cache.clear();
+  return {
+    number: created.number,
+    url: created.html_url,
+  };
+}
+
+async function writeRequest<T>(
+  path: string,
+  init: {
+    method: string;
+    body: string;
+  },
+): Promise<T> {
+  if (!owner || !repo) throw new Error(`Invalid GitHub repository: ${repository}`);
+
+  const writeToken = await getWriteToken();
+  const response = await fetch(`${apiBase}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${writeToken}`,
+      "Content-Type": "application/json",
+      "User-Agent": "death-by-ai-projector",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API ${response.status}: ${await response.text()}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+let cachedWriteToken: CacheEntry<string> | null = null;
+
+async function getWriteToken() {
+  if (cachedWriteToken && cachedWriteToken.expiresAt > Date.now()) return cachedWriteToken.value;
+
+  const installationToken = await getInstallationToken();
+  if (installationToken) {
+    cachedWriteToken = {
+      value: installationToken.token,
+      expiresAt: Date.parse(installationToken.expiresAt) - 60_000,
+    };
+    return installationToken.token;
+  }
+
+  if (token) return token;
+  throw new Error(
+    "GitHub issue creation requires GITHUB_TOKEN or GitHub App env: OZ_GITHUB_APP_ID, OZ_GITHUB_APP_PRIVATE_KEY, and OZ_GITHUB_APP_INSTALLATION_ID.",
+  );
+}
+
+async function getInstallationToken(): Promise<{ token: string; expiresAt: string } | null> {
+  const appId = process.env.OZ_GITHUB_APP_ID || process.env.GITHUB_APP_ID || "";
+  const privateKey = process.env.OZ_GITHUB_APP_PRIVATE_KEY || process.env.GITHUB_APP_PRIVATE_KEY || "";
+  const installationId =
+    process.env.OZ_GITHUB_APP_INSTALLATION_ID || process.env.GITHUB_APP_INSTALLATION_ID || "";
+  if (!appId || !privateKey || !installationId) return null;
+
+  const response = await fetch(`${apiBase}/app/installations/${installationId}/access_tokens`, {
+    method: "POST",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${buildAppJwt(appId, privateKey)}`,
+      "User-Agent": "death-by-ai-projector",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub App token exchange failed ${response.status}: ${await response.text()}`);
+  }
+  const data = (await response.json()) as { token?: string; expires_at?: string };
+  if (!data.token || !data.expires_at) throw new Error("GitHub App token exchange returned no token");
+  return { token: data.token, expiresAt: data.expires_at };
+}
+
 async function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
   const entry = cache.get(key) as CacheEntry<T> | undefined;
   if (entry && entry.expiresAt > Date.now()) return entry.value;
@@ -227,4 +366,36 @@ function getVerdict(issue: GitHubIssue): Verdict | null {
   if (labels.includes("verdict:survived")) return "survived";
   if (labels.includes("verdict:died")) return "died";
   return null;
+}
+
+function buildAppJwt(appId: string, privateKey: string) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const payload = base64Url(
+    JSON.stringify({
+      iat: now - 60,
+      exp: now + 9 * 60,
+      iss: appId,
+    }),
+  );
+  const signingInput = `${header}.${payload}`;
+  const signature = createSign("RSA-SHA256").update(signingInput).sign(normalizePrivateKey(privateKey));
+  return `${signingInput}.${base64Url(signature)}`;
+}
+
+function base64Url(input: string | Buffer) {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+}
+
+function normalizePrivateKey(privateKey: string) {
+  return privateKey.includes("\\n") ? privateKey.replace(/\\n/g, "\n") : privateKey;
+}
+
+function truncateForTitle(value: string) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > 70 ? `${normalized.slice(0, 67)}...` : normalized;
 }
