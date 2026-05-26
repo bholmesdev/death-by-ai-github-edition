@@ -14,7 +14,7 @@ Evaluate the issue as a survival scenario:
 
 Reject sexual content, targeted harassment, gore, slurs, real-person harm, private info, and scenarios that are not survival prompts.
 
-Output only `scenario_moderation_result.json`:
+Create `scenario_moderation_result.json`:
 
 ```json
 {
@@ -24,3 +24,15 @@ Output only `scenario_moderation_result.json`:
 ```
 
 `verdict` must be `APPROVED` or `REJECTED`. Do not edit GitHub.
+
+Validate the JSON, then upload it as an Oz run artifact:
+
+```sh
+oz artifact upload scenario_moderation_result.json
+```
+
+If `oz` is unavailable, use:
+
+```sh
+oz-preview artifact upload scenario_moderation_result.json
+```

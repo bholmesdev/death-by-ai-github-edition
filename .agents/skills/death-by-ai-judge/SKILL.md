@@ -17,7 +17,7 @@ Rules:
   - `( ❤️ {name} survived )`
   - `( 💀 {name} died )`
 
-Output only `verdict_result.json`:
+Create `verdict_result.json`:
 
 ```json
 {
@@ -26,3 +26,15 @@ Output only `verdict_result.json`:
 ```
 
 Do not edit GitHub.
+
+Validate the JSON, then upload it as an Oz run artifact:
+
+```sh
+oz artifact upload verdict_result.json
+```
+
+If `oz` is unavailable, use:
+
+```sh
+oz-preview artifact upload verdict_result.json
+```
