@@ -1,0 +1,13 @@
+name: Scenario
+description: Submit a survival scenario for Death by AI.
+title: "Scenario: "
+labels: ["game:scenario"]
+body:
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt
+      description: A public-conference-safe survival setup.
+      placeholder: "You're trapped in an elevator with..."
+    validations:
+      required: true

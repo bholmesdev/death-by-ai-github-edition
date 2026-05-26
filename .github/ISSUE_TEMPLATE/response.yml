@@ -1,0 +1,17 @@
+name: Response
+description: Submit your survival plan.
+title: "Response: "
+labels: ["game:response"]
+body:
+  - type: textarea
+    id: response
+    attributes:
+      label: Response
+      value: |
+        **Name:**
+
+        responds-to: #N
+
+        My survival plan:
+    validations:
+      required: true
