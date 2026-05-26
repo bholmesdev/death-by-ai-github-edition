@@ -2,7 +2,6 @@ import { Form, useLoaderData, useSubmit } from "react-router";
 import { useEffect } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
-import MingcuteRefresh2Line from "~icons/mingcute/refresh-2-line";
 import MingcuteRightLine from "~icons/mingcute/right-line";
 import MingcuteShuffle2Line from "~icons/mingcute/shuffle-2-line";
 
@@ -17,6 +16,7 @@ import {
   startGame,
   startReveal,
   startTimer,
+  type PlayerScore,
   type ResponseVerdict,
 } from "../game.server";
 import { splitReveal } from "../reveal";
@@ -57,7 +57,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Home() {
   const game = useLoaderData<typeof loader>();
   const submit = useSubmit();
-  const selectedResponse = [...game.stragglers, ...game.readyResponses].find(
+  const selectedResponse = [...game.stragglers, ...game.readyResponses, ...game.revealedResponses].find(
     (response) => response.id === game.reveal.selectedResponseId,
   );
   const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body, selectedResponse) : null;
@@ -101,9 +101,10 @@ export default function Home() {
         <div>
           <h1 className="text-2xl font-bold">Death by AI: GitHub Edition</h1>
           <p>Round {game.roundNumber || "-"}</p>
+          <Scoreboard scores={game.scores} />
         </div>
         <div className="flex gap-2">
-          {game.phase !== "idle" && game.phase !== "ended" ? (
+          {game.phase === "confirming" || game.phase === "submitting" ? (
             <>
               <ActionButton icon={<MingcuteShuffle2Line />} intent="shuffle">
                 Shuffle prompt
@@ -163,6 +164,21 @@ export default function Home() {
         </section>
       ) : null}
 
+      {game.phase === "confirming" && !game.currentScenario ? (
+        <section className="mx-auto max-w-3xl text-center">
+          <h2 className="text-3xl font-bold">No prompts ready</h2>
+          <p className="my-6">Suggest prompts on GitHub, then reload when labels are ready.</p>
+          <div className="flex justify-center gap-3">
+            <a className="border border-black px-4 py-2" href={game.suggestPromptUrl}>
+              Suggest prompt
+            </a>
+            <button className="border border-black px-4 py-2" onClick={() => window.location.reload()} type="button">
+              Reload
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       {game.phase === "submitting" && game.currentScenario ? (
         <section className="mx-auto max-w-4xl text-center">
           <PromptHeader prompt={game.currentScenario.prompt} />
@@ -190,15 +206,17 @@ export default function Home() {
               footer={selectedSegments.footer}
             />
           ) : (
-            <ResponseStrip title="Ready stories" responses={game.readyResponses} />
+            <>
+              <ResponseStrip title="Ready stories" responses={game.readyResponses} />
+              {game.revealedResponses.length ? (
+                <CompletedStrip responses={game.revealedResponses} />
+              ) : null}
+            </>
           )}
           {!selectedResponse ? (
             <div className="mt-8 flex gap-2">
               <ActionButton icon={<MingcuteRightLine />} intent="next-round">
                 Next round
-              </ActionButton>
-              <ActionButton icon={<MingcuteRefresh2Line />} intent="shuffle">
-                Re-roll
               </ActionButton>
             </div>
           ) : null}
@@ -260,6 +278,38 @@ function ResponseStrip({ title, responses }: { title: string; responses: Respons
         <p>No ready stories yet.</p>
       )}
     </section>
+  );
+}
+
+function CompletedStrip({ responses }: { responses: ResponseVerdict[] }) {
+  return (
+    <section className="mt-6">
+      <h3 className="mb-3 text-xl font-bold">Revealed stories</h3>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {responses.map((response) => (
+          <div className="border border-black p-4 text-left" key={response.id}>
+            <img alt="" className="mb-3 size-12" src={response.avatarUrl} />
+            <p className="font-bold">{response.playerName}</p>
+            <p>Issue #{response.issueNumber}</p>
+            <p className="mt-3 font-bold">{response.verdict === "survived" ? "Survived" : "Died"}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Scoreboard({ scores }: { scores: PlayerScore[] }) {
+  if (!scores.length) return null;
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-3">
+      {scores.map((score) => (
+        <p className="border border-black px-2 py-1" key={score.playerName}>
+          {score.playerName}: {score.total} ({score.survived} survived, {score.died} died)
+        </p>
+      ))}
+    </div>
   );
 }
 

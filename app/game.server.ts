@@ -24,6 +24,13 @@ export type RevealState = {
   revealedResponseIds: string[];
 };
 
+export type PlayerScore = {
+  playerName: string;
+  survived: number;
+  died: number;
+  total: number;
+};
+
 export type GamePhase = "idle" | "confirming" | "submitting" | "revealing" | "ended";
 
 export type GameSnapshot = {
@@ -34,9 +41,12 @@ export type GameSnapshot = {
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
   readyResponses: ResponseVerdict[];
+  revealedResponses: ResponseVerdict[];
   stragglers: ResponseVerdict[];
   reveal: RevealState;
+  scores: PlayerScore[];
   joinUrl: string | null;
+  suggestPromptUrl: string;
 };
 
 const scenarios: Scenario[] = [
@@ -109,6 +119,8 @@ type GameState = {
   reveal: RevealState;
   previousRoundNumber: number | null;
   previousRevealedResponseIds: string[];
+  scoredResponseIds: Set<string>;
+  scoresByPlayer: Map<string, PlayerScore>;
 };
 
 const state: GameState = {
@@ -125,6 +137,8 @@ const state: GameState = {
   },
   previousRoundNumber: null,
   previousRevealedResponseIds: [],
+  scoredResponseIds: new Set(),
+  scoresByPlayer: new Map(),
 };
 
 export function getGameSnapshot(): GameSnapshot {
@@ -134,6 +148,13 @@ export function getGameSnapshot(): GameSnapshot {
   const readyResponses = currentScenarioNumber
     ? mockResponses
         .filter((response) => response.scenarioNumber === currentScenarioNumber)
+        .filter((response) => !state.reveal.revealedResponseIds.includes(response.id))
+        .sort((a, b) => a.arrivedAt - b.arrivedAt)
+    : [];
+  const revealedResponses = currentScenarioNumber
+    ? mockResponses
+        .filter((response) => response.scenarioNumber === currentScenarioNumber)
+        .filter((response) => state.reveal.revealedResponseIds.includes(response.id))
         .sort((a, b) => a.arrivedAt - b.arrivedAt)
     : [];
 
@@ -151,9 +172,12 @@ export function getGameSnapshot(): GameSnapshot {
     submissionEndsAt: state.submissionEndsAt,
     submissionDurationSeconds: state.submissionDurationSeconds,
     readyResponses,
+    revealedResponses,
     stragglers,
     reveal: state.reveal,
+    scores: [...state.scoresByPlayer.values()].sort((a, b) => b.total - a.total),
     joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario) : null,
+    suggestPromptUrl: buildSuggestPromptUrl(),
   };
 }
 
@@ -162,6 +186,8 @@ export function startGame() {
   state.roundNumber = 1;
   state.previousRoundNumber = null;
   state.previousRevealedResponseIds = [];
+  state.scoredResponseIds.clear();
+  state.scoresByPlayer.clear();
   state.usedScenarioNumbers.clear();
   state.currentScenario = pickScenario(state.usedScenarioNumbers);
   resetRoundState();
@@ -208,12 +234,14 @@ export function advanceReveal(totalSegments: number) {
 
   if (!state.reveal.revealedResponseIds.includes(state.reveal.selectedResponseId)) {
     state.reveal.revealedResponseIds.push(state.reveal.selectedResponseId);
+    scoreResponse(state.reveal.selectedResponseId);
   }
   state.reveal.selectedResponseId = null;
   state.reveal.visibleSegments = 0;
 }
 
 export function nextRound() {
+  scoreCurrentRound();
   state.previousRoundNumber = state.currentScenario?.number ?? null;
   state.previousRevealedResponseIds = [...state.reveal.revealedResponseIds];
   state.roundNumber += 1;
@@ -248,13 +276,45 @@ function resetRoundState() {
   };
 }
 
+function scoreCurrentRound() {
+  if (!state.currentScenario) return;
+
+  for (const response of mockResponses) {
+    if (response.scenarioNumber !== state.currentScenario.number) continue;
+    scoreResponse(response.id);
+  }
+}
+
+function scoreResponse(responseId: string) {
+  if (state.scoredResponseIds.has(responseId)) return;
+
+  const response = mockResponses.find((item) => item.id === responseId);
+  if (!response) return;
+
+  const existing = state.scoresByPlayer.get(response.playerName) ?? {
+    playerName: response.playerName,
+    survived: 0,
+    died: 0,
+    total: 0,
+  };
+
+  state.scoresByPlayer.set(response.playerName, {
+    ...existing,
+    survived: existing.survived + (response.verdict === "survived" ? 1 : 0),
+    died: existing.died + (response.verdict === "died" ? 1 : 0),
+    total: existing.total + (response.verdict === "survived" ? 1 : 0),
+  });
+  state.scoredResponseIds.add(response.id);
+}
+
 function pickScenario(used: Set<number>, excludeNumber?: number) {
   const candidates = scenarios.filter(
     (scenario) => !used.has(scenario.number) && scenario.number !== excludeNumber,
   );
-  const pool = candidates.length ? candidates : scenarios;
-  const lowestCount = Math.min(...pool.map((scenario) => scenario.responseCount));
-  const lowest = pool.filter((scenario) => scenario.responseCount === lowestCount);
+  if (!candidates.length) return null;
+
+  const lowestCount = Math.min(...candidates.map((scenario) => scenario.responseCount));
+  const lowest = candidates.filter((scenario) => scenario.responseCount === lowestCount);
   return lowest[Math.floor(Math.random() * lowest.length)] ?? null;
 }
 
@@ -264,6 +324,16 @@ function buildJoinUrl(scenario: Scenario) {
     template: "response.yml",
     labels: "game:response",
     body,
+  });
+
+  return `https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?${params}`;
+}
+
+function buildSuggestPromptUrl() {
+  const params = new URLSearchParams({
+    labels: "game:scenario",
+    title: "Scenario: ",
+    body: "Prompt:\n",
   });
 
   return `https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?${params}`;
