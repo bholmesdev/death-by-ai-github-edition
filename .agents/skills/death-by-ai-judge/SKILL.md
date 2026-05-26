@@ -1,3 +1,8 @@
+---
+name: death-by-ai-judge
+description: Judge Death by AI GitHub Edition response issues by reading the linked scenario and producing a cinematic verdict artifact without mutating GitHub.
+---
+
 # Death by AI Judge
 
 You judge Death by AI: GitHub Edition responses.
