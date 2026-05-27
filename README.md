@@ -1,10 +1,8 @@
 # Death by AI: GitHub Edition
 
-A live conference party game in the spirit of [Death by AI](https://deathbyai.gg/) — but every input is a real GitHub issue, and the judge is a real cloud agent running on this repo. Doubles as a demo of agents operating on an open-source project.
+A live conference party game in the spirit of [Death by AI](https://deathbyai.gg/) — but every input is a real GitHub issue, and the judge is a real cloud agent running on this repo. Doubles as a demo of Oz agents operating on an open-source project.
 
-See [`CONTEXT.md`](./CONTEXT.md) for the canonical glossary.
-
-## The game loop
+## How it works
 
 A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A **response** is your survival plan. The judge agent writes a short cinematic story deciding whether you live or die.
 
@@ -81,7 +79,7 @@ https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?templa
 
 Replace `N` with the scenario issue number.
 
-## P0 deploy
+## Deploy
 
 Vercel setup:
 
@@ -92,36 +90,3 @@ Vercel setup:
 5. Install the GitHub App on this repo with Issues read/write and Metadata read.
 6. Set the GitHub App webhook URL to `https://<project>.vercel.app/api/webhook`, content type JSON, secret = `OZ_GITHUB_WEBHOOK_SECRET`, event = Issues.
 7. Verify `/api/webhook` responds 200 to GET, `/api/cron` is protected by `CRON_SECRET`, and an issue webhook delivery returns 202.
-
-## Roadmap
-
-### Phase 0 — Game playable on github.com alone (no projector)
-
-Goal: anyone with a browser can play the full game using only github.com — file a scenario, get it moderated; file a response, get a verdict story back. The projector doesn't exist yet.
-
-- Configure labels, issue templates, and Oz GitHub App on this repo
-- Port `oz-for-oss` webhook control plane (`api/`, `core/`) into this repo
-- Implement `scenario-moderator` skill + workflow
-- Implement `death-by-ai-judge` skill + workflow
-- Deploy to Vercel with secrets + KV
-- Manual smoke test: create scenarios + responses, verify end-to-end
-
-### Phase 1 — Projector
-
-Goal: the game runs live in a room. MC drives a projector that shows the current round, polls GitHub for state, and reveals verdicts theatrically.
-
-- Game/round/reveal state machine in React Router server (ephemeral)
-- GitHub polling layer with caching
-- Projector UI: scenario view (prompt + QR + timer), reveal view (tiles), reveal player (sentence-by-sentence)
-- MC controls: open round, re-roll, start timer, next reveal, end round, end game
-- Stragglers carry-over from previous round
-- QR code generation with current-scenario deep link
-
-### Phase 2 — Polish & community
-
-- Second QR for scenario suggestion
-- Run stock `oz-for-oss` triage in parallel on response issues for comedy effect (real triage labels on absurd prompts)
-- Personality selector at game start (chaos / harsh / encouraging)
-- Profanity-list redaction at issue insertion
-- Avatar / identity polish on the projector
-- Post-event leaderboard / gallery
