@@ -8,23 +8,25 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
 
 ```
                            ┌───────────────────────────────────────┐
-                           │  Anyone files a scenario issue        │
-                           │  → moderator agent labels it          │
-                           │     scenario:approved / rejected      │
+                           │  Anyone suggests a scenario via the   │
+                           │  app or GitHub → moderator agent      │
+                           │  labels it scenario:approved/rejected │
                            └────────────────┬──────────────────────┘
                                             │
                                             ▼
    ┌──────────────────────────────────────────────────────────────────┐
    │ ROUND (during the event)                                         │
    │                                                                  │
-   │  1. MC clicks "open round" on the projector.                     │
-   │     Projector picks an approved scenario with the fewest         │
-   │     existing responses (random tiebreak), excluding ones         │
-   │     already used this game.                                      │
+   │  1. MC clicks "Start game" / "Next round" on the projector.      │
+   │     Projector proposes an approved scenario (fewest existing     │
+   │     responses first, random tiebreak, skipping used ones).       │
+   │     MC can shuffle to a different scenario from the deck,        │
+   │     set the timer duration, then click "Start round".            │
    │                                                                  │
-   │  2. Scenario shows on the TV with a QR code + countdown timer.   │
-   │     Attendees scan the QR — it deep-links to GitHub's new-issue  │
-   │     page with `responds-to: #N` and `game:response` label.       │
+   │  2. Scenario and a countdown timer show on screen. A QR code     │
+   │     links to the app's response form (/respond/:N). Attendees    │
+   │     fill in their name and survival plan; the app creates the    │
+   │     GitHub issue on their behalf.                                │
    │                                                                  │
    │  3. Each response issue triggers the judge agent. The agent      │
    │     reads the linked scenario + the response, writes a 3-5       │
@@ -63,21 +65,13 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
 | Moderation outcome | `scenario:approved` or `scenario:rejected` label, plus a friendly bot comment. |
 | Agent run | A "progress comment" on the issue containing the Oz cloud-run session link. |
 
-## GitHub entry links
+## App routes
 
-Scenario QR:
-
-```text
-https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=scenario.yml&labels=game%3Ascenario&title=Scenario%3A%20&prompt=
-```
-
-Response QR for scenario `#N`:
-
-```text
-https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A%20&scenario=%23N&plan=
-```
-
-Replace `N` with the scenario issue number.
+| Route | Purpose |
+|---|---|
+| `/` | MC projector UI (game state machine) |
+| `/respond/:N` | Player response form for scenario `#N` — QR code target during a round |
+| `/suggest` | Scenario suggestion form — shown between rounds and on the idle screen |
 
 ## Deploy
 
