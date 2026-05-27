@@ -50,6 +50,7 @@ const base: GameSnapshot = {
   phase: "idle",
   roundNumber: 0,
   currentScenario: null,
+  scenarioDeck: [],
   usedScenarioNumbers: [],
   submissionEndsAt: null,
   submissionDurationSeconds: 180,
@@ -72,7 +73,7 @@ export function getDemoSnapshot(phase: string): GameSnapshot {
   };
 
   if (phase === "confirming") {
-    return { ...base, phase: "confirming", roundNumber: 1, currentScenario: scenario };
+    return { ...base, phase: "confirming", roundNumber: 1, currentScenario: scenario, scenarioDeck: [scenario] };
   }
 
   if (phase === "submitting") {

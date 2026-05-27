@@ -1,5 +1,5 @@
 import { Form, useLoaderData, useNavigation, useSubmit } from "react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
 import MingcuteRightLine from "~icons/mingcute/right-line";
@@ -9,18 +9,18 @@ import MingcuteCheckLine from "~icons/mingcute/check-line";
 
 import { Spiral } from "../components/spiral";
 import {
-  advanceReveal,
   closeResponse,
   endGame,
   getGameSnapshot,
   nextRound,
+  revealResponse,
   selectResponse,
-  shuffleScenario,
   startGame,
   startReveal,
   startTimer,
   type PlayerScore,
   type ResponseVerdict,
+  type Scenario,
 } from "../game.server";
 import { splitReveal } from "../reveal";
 import type { Route } from "./+types/home";
@@ -47,16 +47,16 @@ export async function action({ request }: Route.ActionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent === "start-game") await startGame();
-  if (intent === "shuffle") await shuffleScenario();
   if (intent === "start-timer") {
-    startTimer(Number(formData.get("durationSeconds") ?? 240));
+    startTimer(
+      Number(formData.get("durationSeconds") ?? 240),
+      Number(formData.get("scenarioNumber") ?? 0) || undefined,
+    );
   }
   if (intent === "start-reveal") startReveal();
   if (intent === "select-response") selectResponse(String(formData.get("responseId")));
-  if (intent === "advance-reveal") {
-    advanceReveal(Number(formData.get("totalSegments") ?? 0));
-  }
   if (intent === "close-response") closeResponse();
+  if (intent === "reveal-response") revealResponse(String(formData.get("responseId")));
   if (intent === "next-round") await nextRound();
   if (intent === "end-game") endGame();
 
@@ -69,6 +69,8 @@ export default function Home() {
   const submit = useSubmit();
   const pendingIntent =
     navigation.state !== "idle" ? String(navigation.formData?.get("intent") ?? "") : null;
+  const pendingResponseId =
+    pendingIntent === "select-response" ? String(navigation.formData?.get("responseId") ?? "") : null;
   const selectedResponse = [...game.stragglers, ...game.readyResponses, ...game.revealedResponses].find(
     (response) => response.id === game.reveal.selectedResponseId,
   );
@@ -86,16 +88,6 @@ export default function Home() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement) return;
-      if ((event.code === "Space" || event.key === "ArrowRight") && selectedSegments) {
-        event.preventDefault();
-        submit(
-          {
-            intent: "advance-reveal",
-            totalSegments: String(selectedSegments.segments.length + 1),
-          },
-          { method: "post" },
-        );
-      }
       if (event.key.toLowerCase() === "n" && game.phase === "revealing") {
         submit({ intent: "next-round" }, { method: "post" });
       }
@@ -103,7 +95,7 @@ export default function Home() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [game.phase, selectedSegments, submit]);
+  }, [game.phase, submit]);
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
@@ -130,6 +122,7 @@ export default function Home() {
         {game.phase === "confirming" ? (
           <ConfirmView
             scenario={game.currentScenario}
+            scenarioDeck={game.scenarioDeck}
             durationSeconds={game.submissionDurationSeconds}
             pendingIntent={pendingIntent}
             suggestPromptUrl={game.suggestPromptUrl}
@@ -156,6 +149,7 @@ export default function Home() {
             stragglers={game.stragglers}
             readyResponses={game.readyResponses}
             revealedResponses={game.revealedResponses}
+            pendingResponseId={pendingResponseId}
             selectedResponse={selectedResponse ?? null}
             selectedSegments={selectedSegments}
             visibleSegments={game.reveal.visibleSegments}
@@ -254,20 +248,34 @@ function ScoreRow({ score, rank }: { score: PlayerScore; rank: number }) {
 
 function ConfirmView({
   scenario,
+  scenarioDeck,
   durationSeconds,
   pendingIntent,
   suggestPromptUrl,
   roundNumber,
   scores,
 }: {
-  scenario: { prompt: string } | null;
+  scenario: Scenario | null;
+  scenarioDeck: Scenario[];
   durationSeconds: number;
   pendingIntent: string | null;
   suggestPromptUrl: string;
   roundNumber: number;
   scores: PlayerScore[];
 }) {
-  if (!scenario) {
+  const initialIndex = Math.max(
+    0,
+    scenarioDeck.findIndex((deckScenario) => deckScenario.number === scenario?.number),
+  );
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    setSelectedIndex(initialIndex);
+  }, [initialIndex, scenarioDeck]);
+
+  const selectedScenario = scenarioDeck[selectedIndex] ?? scenario;
+
+  if (!selectedScenario) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         <p className="font-display text-dba-yellow text-lg tracking-[0.3em] uppercase">
@@ -305,17 +313,23 @@ function ConfirmView({
           Prompt
         </p>
         <h2 className="font-display mt-4 text-5xl leading-tight md:text-7xl drop-shadow-[0_6px_0_rgba(0,0,0,0.25)]">
-          {scenario.prompt}
+          {selectedScenario.prompt}
         </h2>
       </div>
 
       <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
-        <SecondaryButton intent="shuffle" pendingIntent={pendingIntent}>
+        <button
+          type="button"
+          className="font-display inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-base text-white hover:bg-white/25 disabled:opacity-60"
+          disabled={scenarioDeck.length < 2}
+          onClick={() => setSelectedIndex((index) => (index + 1) % scenarioDeck.length)}
+        >
           <MingcuteShuffle2Line className="text-xl" /> Shuffle
-        </SecondaryButton>
+        </button>
 
         <Form method="post" className="flex items-center gap-3 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm">
           <input type="hidden" name="intent" value="start-timer" />
+          <input type="hidden" name="scenarioNumber" value={selectedScenario.number} />
           <label className="flex items-center gap-2 text-sm uppercase tracking-wider text-white/80">
             Timer
             <input
@@ -446,6 +460,7 @@ function RevealView({
   stragglers,
   readyResponses,
   revealedResponses,
+  pendingResponseId,
   selectedResponse,
   selectedSegments,
   visibleSegments,
@@ -457,6 +472,7 @@ function RevealView({
   stragglers: ResponseVerdict[];
   readyResponses: ResponseVerdict[];
   revealedResponses: ResponseVerdict[];
+  pendingResponseId: string | null;
   selectedResponse: ResponseVerdict | null;
   selectedSegments: { segments: string[]; footer: string } | null;
   visibleSegments: number;
@@ -494,14 +510,14 @@ function RevealView({
           <ResponseGrid
             title="From previous round"
             responses={stragglers}
-            pendingIntent={pendingIntent}
+            pendingResponseId={pendingResponseId}
           />
         ) : null}
 
         <ResponseGrid
           title="Ready to reveal"
           responses={readyResponses}
-          pendingIntent={pendingIntent}
+          pendingResponseId={pendingResponseId}
           emptyMessage="Waiting for the judge to weigh in..."
         />
 
@@ -522,15 +538,14 @@ function RevealView({
 function ResponseGrid({
   title,
   responses,
-  pendingIntent,
+  pendingResponseId,
   emptyMessage,
 }: {
   title: string;
   responses: ResponseVerdict[];
-  pendingIntent: string | null;
+  pendingResponseId: string | null;
   emptyMessage?: string;
 }) {
-  const isPending = pendingIntent === "select-response";
 
   return (
     <section>
@@ -545,7 +560,7 @@ function ResponseGrid({
               <input type="hidden" name="responseId" value={response.id} />
               <button
                 type="submit"
-                disabled={isPending}
+                disabled={pendingResponseId === response.id}
                 className="group flex flex-col items-center gap-3 rounded-2xl border-2 border-white/40 bg-black/20 p-4 text-center transition hover:-translate-y-1 hover:border-dba-yellow hover:bg-black/30 disabled:opacity-60"
               >
                 <img
@@ -615,11 +630,35 @@ function RevealPlayer({
   footer: string;
   pendingIntent: string | null;
 }) {
-  const shownSegments = segments.slice(0, Math.min(visibleSegments, segments.length));
-  const showFooter = visibleSegments > segments.length;
+  const [localSegments, setLocalSegments] = useState(visibleSegments || 1);
+  const submit = useSubmit();
+  const shownSegments = segments.slice(0, Math.min(localSegments, segments.length));
+  const showFooter = localSegments > segments.length;
   const isClosing = pendingIntent === "close-response";
-  const isAdvancing = pendingIntent === "advance-reveal";
+  const isRevealing = pendingIntent === "reveal-response";
   const survived = response.verdict === "survived";
+
+  useEffect(() => {
+    setLocalSegments(visibleSegments || 1);
+  }, [response.id, visibleSegments]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement) return;
+      if (event.code !== "Space" && event.key !== "ArrowRight") return;
+
+      event.preventDefault();
+      if (localSegments <= segments.length) {
+        setLocalSegments((count) => count + 1);
+        return;
+      }
+
+      submit({ intent: "reveal-response", responseId: response.id }, { method: "post" });
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [localSegments, response.id, segments.length, submit]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -658,23 +697,33 @@ function RevealPlayer({
         </div>
       </div>
 
-      <GameFooter pendingIntent={pendingIntent} scores={[]} light>
-        <SecondaryButton intent="close-response" pendingIntent={pendingIntent} light compact>
-          {isClosing ? <Spinner /> : null} Back
-        </SecondaryButton>
-        <Form method="post">
-          <input type="hidden" name="intent" value="advance-reveal" />
-          <input type="hidden" name="totalSegments" value={segments.length + 1} />
-          <button
-            type="submit"
-            disabled={isAdvancing}
-            className="font-display inline-flex items-center gap-2 rounded-full bg-dba-yellow px-8 py-3 text-xl text-dba-ink hover:brightness-110 disabled:opacity-60"
-          >
-            {isAdvancing ? <Spinner /> : <MingcuteRightLine className="text-2xl" />}
-            {showFooter ? "Close story" : "Continue"}
-          </button>
-        </Form>
-      </GameFooter>
+      <BottomBar light>
+        <div className="flex flex-1 justify-start">
+          <SecondaryButton intent="close-response" pendingIntent={pendingIntent} light>
+            {isClosing ? <Spinner /> : null} Back
+          </SecondaryButton>
+        </div>
+        <button
+          type="button"
+          disabled={isRevealing}
+          className="font-display inline-flex min-w-80 items-center justify-center gap-3 rounded-full bg-dba-yellow px-12 py-4 text-3xl text-dba-ink shadow-[0_4px_0_rgba(0,0,0,0.18)] hover:brightness-110 disabled:opacity-60"
+          onClick={() => {
+            if (localSegments <= segments.length) {
+              setLocalSegments((count) => count + 1);
+              return;
+            }
+            submit({ intent: "reveal-response", responseId: response.id }, { method: "post" });
+          }}
+        >
+          {isRevealing ? <Spinner /> : <MingcuteRightLine className="text-2xl" />}
+          {showFooter ? "Close story" : "Continue"}
+        </button>
+        <div className="flex flex-1 justify-end">
+          <SecondaryButton intent="end-game" pendingIntent={pendingIntent} light>
+            <MingcuteCloseLine /> End game
+          </SecondaryButton>
+        </div>
+      </BottomBar>
     </div>
   );
 }

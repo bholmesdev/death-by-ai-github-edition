@@ -45,6 +45,7 @@ export type GameSnapshot = {
   phase: GamePhase;
   roundNumber: number;
   currentScenario: Scenario | null;
+  scenarioDeck: Scenario[];
   usedScenarioNumbers: number[];
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
@@ -63,6 +64,8 @@ type GameState = {
   roundNumber: number;
   currentScenario: Scenario | null;
   usedScenarioNumbers: Set<number>;
+  scenarioDeck: Scenario[];
+  scenarioDeckIndex: number;
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
   reveal: RevealState;
@@ -78,6 +81,8 @@ const state: GameState = {
   roundNumber: 0,
   currentScenario: null,
   usedScenarioNumbers: new Set(),
+  scenarioDeck: [],
+  scenarioDeckIndex: 0,
   submissionEndsAt: null,
   submissionDurationSeconds: 240,
   reveal: {
@@ -117,6 +122,7 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     phase: state.phase,
     roundNumber: state.roundNumber,
     currentScenario: state.currentScenario,
+    scenarioDeck: state.scenarioDeck.filter((scenario) => !state.usedScenarioNumbers.has(scenario.number)),
     usedScenarioNumbers: [...state.usedScenarioNumbers],
     submissionEndsAt: state.submissionEndsAt,
     submissionDurationSeconds: state.submissionDurationSeconds,
@@ -131,6 +137,42 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
   };
 }
 
+function nextScenarioFromDeck(used: Set<number>, excludeNumber?: number) {
+  while (state.scenarioDeckIndex < state.scenarioDeck.length) {
+    const scenario = state.scenarioDeck[state.scenarioDeckIndex];
+    state.scenarioDeckIndex += 1;
+
+    if (used.has(scenario.number) || scenario.number === excludeNumber) continue;
+    return scenario;
+  }
+
+  return null;
+}
+
+function buildScenarioDeck(scenarios: Scenario[]) {
+  const grouped = new Map<number, Scenario[]>();
+  for (const scenario of scenarios) {
+    const group = grouped.get(scenario.responseCount) ?? [];
+    group.push(scenario);
+    grouped.set(scenario.responseCount, group);
+  }
+
+  return [...grouped.entries()]
+    .sort(([leftCount], [rightCount]) => leftCount - rightCount)
+    .flatMap(([, group]) => shuffle(group));
+}
+
+function shuffle<T>(items: T[]) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
 export async function startGame() {
   state.phase = "confirming";
   state.roundNumber = 1;
@@ -139,19 +181,14 @@ export async function startGame() {
   state.scoredResponseIds.clear();
   state.scoresByPlayer.clear();
   state.usedScenarioNumbers.clear();
+  state.scenarioDeck = [];
+  state.scenarioDeckIndex = 0;
   state.currentScenario = await pickScenario(state.usedScenarioNumbers);
   resetRoundState();
 }
 
-export async function shuffleScenario() {
-  if (state.phase !== "confirming") return;
-  const next = await pickScenario(state.usedScenarioNumbers, state.currentScenario?.number);
-  if (!next && !state.currentScenario) return;
-  if (next) state.currentScenario = next;
-  resetRoundState();
-}
-
-export function startTimer(durationSeconds: number) {
+export function startTimer(durationSeconds: number, scenarioNumber?: number) {
+  if (scenarioNumber) commitScenario(scenarioNumber);
   if (!state.currentScenario) return;
   state.phase = "submitting";
   state.submissionDurationSeconds = durationSeconds;
@@ -176,20 +213,16 @@ export function closeResponse() {
   state.reveal.visibleSegments = 0;
 }
 
-export function advanceReveal(totalSegments: number) {
-  if (!state.reveal.selectedResponseId) return;
-  if (state.reveal.visibleSegments < totalSegments) {
-    state.reveal.visibleSegments += 1;
-    return;
-  }
-
-  if (!state.reveal.revealedResponseIds.includes(state.reveal.selectedResponseId)) {
-    state.reveal.revealedResponseIds.push(state.reveal.selectedResponseId);
-    scoreResponse(state.reveal.selectedResponseId);
+export function revealResponse(id: string) {
+  if (state.phase !== "revealing") return;
+  if (!state.reveal.revealedResponseIds.includes(id)) {
+    state.reveal.revealedResponseIds.push(id);
+    scoreResponse(id);
   }
   state.reveal.selectedResponseId = null;
   state.reveal.visibleSegments = 0;
 }
+
 
 export async function nextRound() {
   scoreCurrentRound();
@@ -259,13 +292,20 @@ function scoreResponse(responseId: string) {
 }
 
 async function pickScenario(used: Set<number>, excludeNumber?: number) {
-  const scenarios = await getApprovedScenarios();
-  const candidates = scenarios.filter(
-    (scenario) => !used.has(scenario.number) && scenario.number !== excludeNumber,
-  );
-  if (!candidates.length) return null;
+  const nextFromDeck = nextScenarioFromDeck(used, excludeNumber);
+  if (nextFromDeck) return nextFromDeck;
 
-  const lowestCount = Math.min(...candidates.map((scenario) => scenario.responseCount));
-  const lowest = candidates.filter((scenario) => scenario.responseCount === lowestCount);
-  return lowest[Math.floor(Math.random() * lowest.length)] ?? null;
+  const scenarios = await getApprovedScenarios();
+  state.scenarioDeck = buildScenarioDeck(scenarios);
+  state.scenarioDeckIndex = 0;
+
+  return nextScenarioFromDeck(used, excludeNumber);
+}
+
+function commitScenario(scenarioNumber: number) {
+  const selectedIndex = state.scenarioDeck.findIndex((scenario) => scenario.number === scenarioNumber);
+  if (selectedIndex < 0) return;
+
+  state.currentScenario = state.scenarioDeck[selectedIndex];
+  state.scenarioDeckIndex = Math.max(state.scenarioDeckIndex, selectedIndex + 1);
 }
