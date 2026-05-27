@@ -4,7 +4,12 @@ import {
   getApprovedScenarios,
   getReadyResponses,
   getRepoUrl,
+  getSubmittedResponses,
+  type SubmittedResponse,
+  type SubmittedResponseStatus,
 } from "./github.server";
+
+export type { SubmittedResponse, SubmittedResponseStatus };
 
 export type Scenario = {
   number: number;
@@ -57,6 +62,7 @@ export type GameSnapshot = {
   joinUrl: string | null;
   suggestPromptUrl: string;
   repoUrl: string;
+  submittedResponses: SubmittedResponse[];
 };
 
 type GameState = {
@@ -118,6 +124,11 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     state.responsesById.set(response.id, response);
   }
 
+  const submittedResponses =
+    state.phase === "submitting" && currentScenarioNumber
+      ? await getSubmittedResponses(currentScenarioNumber)
+      : [];
+
   return {
     phase: state.phase,
     roundNumber: state.roundNumber,
@@ -134,6 +145,7 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario, origin) : null,
     suggestPromptUrl: buildSuggestPromptUrl(origin),
     repoUrl: getRepoUrl(),
+    submittedResponses,
   };
 }
 

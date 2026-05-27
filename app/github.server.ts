@@ -8,6 +8,7 @@ type GitHubIssue = {
   body: string | null;
   html_url: string;
   created_at: string;
+  comments: number;
   user: {
     login: string;
     avatar_url: string;
@@ -54,10 +55,48 @@ export async function getApprovedScenarios(): Promise<Scenario[]> {
   );
 }
 
+async function listResponseIssues(): Promise<GitHubIssue[]> {
+  return cached("response-issues", 3000, () => listIssues([responseLabel]));
+}
+
+export type SubmittedResponseStatus = "submitted" | "in-progress" | "survived" | "died";
+
+export type SubmittedResponse = {
+  issueNumber: number;
+  playerName: string;
+  avatarUrl: string;
+  issueUrl: string;
+  status: SubmittedResponseStatus;
+};
+
+export async function getSubmittedResponses(scenarioNumber: number): Promise<SubmittedResponse[]> {
+  return withGitHubFallback("submitted responses", [], async () => {
+    const issues = await listResponseIssues();
+    return issues
+      .filter((issue) => parseScenarioNumber(issue.body) === scenarioNumber)
+      .map((issue) => {
+        const verdict = getVerdict(issue);
+        const status: SubmittedResponseStatus =
+          verdict === "survived" ? "survived"
+          : verdict === "died" ? "died"
+          : issue.comments > 0 ? "in-progress"
+          : "submitted";
+        return {
+          issueNumber: issue.number,
+          playerName: issue.user?.login ?? "Anonymous",
+          avatarUrl: issue.user?.avatar_url ?? "",
+          issueUrl: issue.html_url,
+          status,
+        };
+      })
+      .sort((a, b) => a.issueNumber - b.issueNumber);
+  });
+}
+
 export async function getReadyResponses(scenarioNumber: number): Promise<ResponseVerdict[]> {
   return withGitHubFallback("ready responses", [], () =>
     cached(`responses:${scenarioNumber}`, 3000, async () => {
-      const issues = await listIssues([responseLabel]);
+      const issues = await listResponseIssues();
       const matching = issues.filter((issue) => parseScenarioNumber(issue.body) === scenarioNumber);
       const ready = matching.filter((issue) => getVerdict(issue) !== null);
       const responses = await Promise.all(ready.map(toResponseVerdict));
@@ -72,7 +111,7 @@ export async function getReadyResponses(scenarioNumber: number): Promise<Respons
 export async function getResponseCountsByScenario(): Promise<Map<number, number>> {
   const counts = await withGitHubFallback("response counts", [], () =>
     cached("response-counts", 10000, async () => {
-      const issues = await listIssues([responseLabel]);
+      const issues = await listResponseIssues();
       const nextCounts = new Map<number, number>();
 
       for (const issue of issues) {

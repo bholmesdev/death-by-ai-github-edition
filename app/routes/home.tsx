@@ -1,5 +1,5 @@
 import { Form, useLoaderData, useNavigation, useSubmit } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
 import MingcuteRightLine from "~icons/mingcute/right-line";
@@ -21,6 +21,8 @@ import {
   type PlayerScore,
   type ResponseVerdict,
   type Scenario,
+  type SubmittedResponse,
+  type SubmittedResponseStatus,
 } from "../game.server";
 import { splitReveal } from "../reveal";
 import type { Route } from "./+types/home";
@@ -140,6 +142,7 @@ export default function Home() {
             scenarioNumber={game.currentScenario.number}
             pendingIntent={pendingIntent}
             roundNumber={game.roundNumber}
+            submittedResponses={game.submittedResponses}
           />
         ) : null}
 
@@ -396,6 +399,7 @@ function SubmittingView({
   scenarioNumber,
   pendingIntent,
   roundNumber,
+  submittedResponses,
 }: {
   prompt: string;
   submissionEndsAt: number | null;
@@ -404,42 +408,63 @@ function SubmittingView({
   scenarioNumber: number;
   pendingIntent: string | null;
   roundNumber: number;
+  submittedResponses: SubmittedResponse[];
 }) {
-  const repoHost = repoUrl.replace(/^https?:\/\//, "");
   const remaining = secondsLeft(submissionEndsAt);
+  const hasResponses = submittedResponses.length > 0;
 
   return (
     <div className="flex flex-1 flex-col">
       <PromptBar prompt={prompt} />
 
-      <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
-        <p className="font-display text-dba-yellow text-lg tracking-[0.3em] uppercase">
-          Round {roundNumber} · Submissions open
-        </p>
-
-        <p
-          className={`font-display mt-6 text-[10rem] leading-none drop-shadow-[0_10px_0_rgba(0,0,0,0.25)] md:text-[14rem] ${
-            remaining <= 10 ? "text-red-300" : "text-white"
+      <div className="flex flex-1 min-h-0">
+        {/* Left panel: timer + join info */}
+        <div
+          className={`flex shrink-0 flex-col items-center justify-center px-8 py-8 text-center ${
+            hasResponses ? "w-2/5" : "w-full"
           }`}
         >
-          {remaining}
-        </p>
+          <p className="font-display text-dba-yellow text-lg tracking-[0.3em] uppercase">
+            Round {roundNumber} · Submissions open
+          </p>
 
-        {joinUrl ? (
-          <div className="mt-10 flex flex-col items-center gap-4">
-            <p className="text-sm uppercase tracking-[0.3em] text-white/70">
-              Scan to respond
-            </p>
-            <img
-              alt="QR code linking to the GitHub response issue form"
-              className="size-56 rounded-2xl border-4 border-white bg-white p-2 shadow-xl"
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(
-                joinUrl,
-              )}`}
-            />
-            <div className="text-center">
-              <p className="font-display text-2xl text-white md:text-3xl">{joinUrl}</p>
+          <p
+            className={`font-display mt-4 leading-none drop-shadow-[0_10px_0_rgba(0,0,0,0.25)] transition-all duration-500 ${
+              hasResponses ? "text-[8rem]" : "text-[10rem] md:text-[14rem]"
+            } ${remaining <= 10 ? "text-red-300" : "text-white"}`}
+          >
+            {remaining}
+          </p>
+
+          {joinUrl ? (
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <p className="text-sm uppercase tracking-[0.3em] text-white/70">
+                Scan to respond
+              </p>
+              <img
+                alt="QR code linking to the GitHub response issue form"
+                className={`rounded-2xl border-4 border-white bg-white p-2 shadow-xl transition-all duration-500 ${
+                  hasResponses ? "size-36" : "size-56"
+                }`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=0&data=${encodeURIComponent(
+                  joinUrl,
+                )}`}
+              />
+              <p
+                className={`font-display text-white transition-all duration-500 ${
+                  hasResponses ? "text-base" : "text-2xl md:text-3xl"
+                }`}
+              >
+                {joinUrl}
+              </p>
             </div>
+          ) : null}
+        </div>
+
+        {/* Right panel: response grid */}
+        {hasResponses ? (
+          <div className="flex flex-1 flex-col min-h-0 overflow-y-auto border-l border-white/10 px-6 py-8">
+            <SubmittedResponsesFeed responses={submittedResponses} />
           </div>
         ) : null}
       </div>
@@ -724,6 +749,89 @@ function RevealPlayer({
           </SecondaryButton>
         </div>
       </BottomBar>
+    </div>
+  );
+}
+
+/* ----------------------- Submitted responses feed ------------------------ */
+
+const STATUS_META: Record<
+  SubmittedResponseStatus,
+  { label: string; className: string; pulse: boolean }
+> = {
+  submitted:     { label: "Submitted", className: "bg-white/20 text-white/70",         pulse: false },
+  "in-progress": { label: "Judging…",  className: "bg-dba-yellow/20 text-dba-yellow", pulse: true  },
+  survived:      { label: "Judged",    className: "bg-white/20 text-white/70",         pulse: false },
+  died:          { label: "Judged",    className: "bg-white/20 text-white/70",         pulse: false },
+};
+
+function SubmittedResponsesFeed({ responses }: { responses: SubmittedResponse[] }) {
+  const prevIssueNumbers = useRef(new Set<number>());
+  const [newIds, setNewIds] = useState(new Set<number>());
+
+  useEffect(() => {
+    const incoming = responses
+      .map((r) => r.issueNumber)
+      .filter((n) => !prevIssueNumbers.current.has(n));
+
+    if (incoming.length > 0) {
+      setNewIds((prev) => new Set([...prev, ...incoming]));
+      incoming.forEach((n) => prevIssueNumbers.current.add(n));
+
+      const timer = window.setTimeout(() => {
+        setNewIds((prev) => {
+          const next = new Set(prev);
+          incoming.forEach((n) => next.delete(n));
+          return next;
+        });
+      }, 1200);
+      return () => window.clearTimeout(timer);
+    }
+  }, [responses]);
+
+  if (!responses.length) return null;
+
+  return (
+    <div className="h-full">
+      <p className="mb-4 text-xs uppercase tracking-[0.3em] text-white/50">
+        {responses.length} response{responses.length !== 1 ? "s" : ""} in
+      </p>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+        {responses.map((r) => {
+          const meta = STATUS_META[r.status];
+          const isNew = newIds.has(r.issueNumber);
+          return (
+            <a
+              key={r.issueNumber}
+              href={r.issueUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={`group flex flex-col items-center gap-3 rounded-2xl border-2 bg-black/20 p-4 text-center transition-all duration-300 hover:-translate-y-1 hover:bg-black/30 ${
+                isNew
+                  ? "scale-105 border-dba-yellow shadow-[0_0_16px_rgba(255,220,50,0.35)]"
+                  : "border-white/30 hover:border-dba-yellow"
+              }`}
+            >
+              <img
+                alt=""
+                className="size-16 rounded-full border-2 border-white/40 group-hover:border-dba-yellow"
+                src={r.avatarUrl || `https://github.com/identicons/${r.playerName}.png`}
+              />
+              <span className="font-display text-lg">{r.playerName}</span>
+              <span className="text-xs uppercase tracking-wider text-white/50">
+                Issue #{r.issueNumber}
+              </span>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-medium uppercase tracking-wider ${
+                  meta.className
+                } ${meta.pulse ? "animate-pulse" : ""}`}
+              >
+                {meta.label}
+              </span>
+            </a>
+          );
+        })}
+      </div>
     </div>
   );
 }
