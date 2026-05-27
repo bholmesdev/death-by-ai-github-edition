@@ -54,6 +54,14 @@ class FakeGithub:
         return self.repo
 
 
+class FakeProgress:
+    def __init__(self):
+        self.completions = []
+
+    def complete(self, status_line):
+        self.completions.append(status_line)
+
+
 def payload(label, body="", number=7):
     labels = label if isinstance(label, list) else [label]
     return {
@@ -156,15 +164,32 @@ class GameWorkflowTests(unittest.TestCase):
     def test_appliers_label_and_comment(self):
         issue = FakeIssue(number=9)
         repo = FakeRepo({9: issue})
+        progress = FakeProgress()
         ScenarioModeratorWorkflow().apply_result(
             repo,
             context={"issue_number": 9},
             run=None,
             result={"verdict": "APPROVED", "comment": "Looks playable."},
-            progress=SimpleNamespace(report_success=lambda: None),
+            progress=progress,
         )
         self.assertIn("scenario:approved", issue.added_labels)
         self.assertEqual(issue.comments, ["Looks playable."])
+        self.assertEqual(progress.completions, ["Scenario moderation complete."])
+
+    def test_judge_applier_uses_progress_complete(self):
+        issue = FakeIssue(number=9)
+        repo = FakeRepo({9: issue})
+        progress = FakeProgress()
+        JudgeWorkflow().apply_result(
+            repo,
+            context={"issue_number": 9},
+            run=None,
+            result={"verdict_comment": "Ada wins.\n\n( ❤️ Ada survived )"},
+            progress=progress,
+        )
+        self.assertIn(SURVIVED_LABEL, issue.added_labels)
+        self.assertEqual(issue.comments, ["Ada wins.\n\n( ❤️ Ada survived )"])
+        self.assertEqual(progress.completions, ["Verdict posted."])
 
 
 if __name__ == "__main__":

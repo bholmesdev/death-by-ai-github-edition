@@ -194,7 +194,7 @@ class ScenarioModeratorWorkflow(BaseGameWorkflow):
         issue.add_to_labels(label)
         body = _comment(result, "comment", "body") or "Thanks for the scenario. The moderator reviewed it."
         issue.create_comment(body)
-        progress.report_success()
+        progress.complete("Scenario moderation complete.")
 
 
 class JudgeWorkflow(BaseGameWorkflow):
@@ -260,7 +260,7 @@ class JudgeWorkflow(BaseGameWorkflow):
             raise ValueError("verdict_result.json missing verdict_comment")
         issue.create_comment(comment)
         issue.add_to_labels(verdict_label_from_text(comment))
-        progress.report_success()
+        progress.complete("Verdict posted.")
 
 
 def build_workflow_registry() -> dict[str, BaseGameWorkflow]:
