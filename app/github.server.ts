@@ -35,11 +35,13 @@ const apiBase = process.env.GITHUB_API_BASE_URL || "https://api.github.com";
 const webBase = process.env.GITHUB_SERVER_URL || "https://github.com";
 const token = process.env.GITHUB_TOKEN;
 const cache = new Map<string, CacheEntry<unknown>>();
+const scenarioLabel = "game:scenario";
+const responseLabel = "game:response";
 
 export async function getApprovedScenarios(): Promise<Scenario[]> {
   return withGitHubFallback("approved scenarios", [], () =>
     cached("scenarios", 7000, async () => {
-      const issues = await listIssues(["game:scenario", "scenario:approved"]);
+      const issues = await listIssues([scenarioLabel, "scenario:approved"]);
       const responseCounts = await getResponseCountsByScenario();
 
       return issues.map((issue) => ({
@@ -55,7 +57,7 @@ export async function getApprovedScenarios(): Promise<Scenario[]> {
 export async function getReadyResponses(scenarioNumber: number): Promise<ResponseVerdict[]> {
   return withGitHubFallback("ready responses", [], () =>
     cached(`responses:${scenarioNumber}`, 3000, async () => {
-      const issues = await listIssues(["game:response"]);
+      const issues = await listIssues([responseLabel]);
       const matching = issues.filter((issue) => parseScenarioNumber(issue.body) === scenarioNumber);
       const ready = matching.filter((issue) => getVerdict(issue) !== null);
       const responses = await Promise.all(ready.map(toResponseVerdict));
@@ -70,7 +72,7 @@ export async function getReadyResponses(scenarioNumber: number): Promise<Respons
 export async function getResponseCountsByScenario(): Promise<Map<number, number>> {
   const counts = await withGitHubFallback("response counts", [], () =>
     cached("response-counts", 10000, async () => {
-      const issues = await listIssues(["game:response"]);
+      const issues = await listIssues([responseLabel]);
       const nextCounts = new Map<number, number>();
 
       for (const issue of issues) {
@@ -91,14 +93,13 @@ export function buildJoinUrl(scenario: Scenario, origin?: string) {
 }
 
 export function buildGitHubJoinUrl(scenarioNumber: number) {
-  // Pre-fill the issue form's `response` textarea (matches `id:` in response.yml).
-  // GitHub ignores `body=` when `template=` is set, so we must use the field id.
-  const response = `responds-to: #${scenarioNumber}\n\nMy survival plan:\n`;
+  // Pre-fill issue form fields by id. GitHub ignores `body=` when `template=` is set.
   const params = new URLSearchParams({
     template: "response.yml",
-    labels: "game:response",
+    labels: responseLabel,
     title: `Response to #${scenarioNumber}`,
-    response,
+    scenario: `#${scenarioNumber}`,
+    plan: "",
   });
 
   return `${webBase}/${owner}/${repo}/issues/new?${params}`;
@@ -115,9 +116,9 @@ export function buildSuggestPromptUrl(origin?: string) {
 export function buildGitHubSuggestPromptUrl() {
   const params = new URLSearchParams({
     template: "scenario.yml",
-    labels: "game:scenario",
+    labels: scenarioLabel,
     title: "Scenario: ",
-    body: "Prompt:\n",
+    prompt: "",
   });
 
   return `${webBase}/${owner}/${repo}/issues/new?${params}`;
@@ -141,14 +142,19 @@ export async function createResponseIssue(input: {
   return createIssue({
     title: `Response to #${input.scenarioNumber} from ${input.displayName}`,
     body: [
-      `responds-to: #${input.scenarioNumber}`,
+      "### Scenario",
       "",
-      `Player: ${input.displayName}`,
+      `#${input.scenarioNumber}`,
       "",
-      "My survival plan:",
+      "### Player",
+      "",
+      input.displayName,
+      "",
+      "### Survival plan",
+      "",
       input.response,
     ].join("\n"),
-    labels: ["game:response"],
+    labels: [responseLabel],
   });
 }
 
@@ -158,8 +164,8 @@ export async function createScenarioIssue(input: {
 }): Promise<CreatedIssue> {
   return createIssue({
     title: `Scenario: ${truncateForTitle(input.prompt)}`,
-    body: ["Prompt:", input.prompt, "", `Suggested by: ${input.displayName}`].join("\n"),
-    labels: ["game:scenario"],
+    body: ["### Prompt", "", input.prompt, "", "### Suggested by", "", input.displayName].join("\n"),
+    labels: [scenarioLabel],
   });
 }
 
@@ -180,6 +186,17 @@ async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | 
     verdict,
     arrivedAt: Date.parse(comment?.created_at ?? issue.created_at),
   };
+}
+
+async function applyIssueLabels(issueNumber: number, labels: string[]) {
+  if (!labels.length) return;
+  await writeRequest<{ labels: GitHubIssue["labels"] }>(
+    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
+    {
+      method: "POST",
+      body: JSON.stringify({ labels }),
+    },
+  );
 }
 
 async function getVerdictComment(issueNumber: number, verdict: Verdict) {
@@ -233,6 +250,7 @@ async function createIssue(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+  await applyIssueLabels(created.number, input.labels);
 
   cache.clear();
   return {
@@ -357,7 +375,9 @@ function cleanVerdictBody(body: string) {
 }
 
 function parseScenarioNumber(body: string | null) {
-  const match = body?.match(/responds-to:\s*#?(\d+)/i);
+  const match =
+    body?.match(/responds-to:\s*#?(\d+)/i) ??
+    body?.match(/###\s*Scenario\s*\n+\s*#?(\d+)/i);
   return match ? Number(match[1]) : null;
 }
 

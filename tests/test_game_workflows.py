@@ -77,6 +77,7 @@ class GameWorkflowTests(unittest.TestCase):
 
     def test_response_helpers(self):
         self.assertEqual(extract_response_target("responds-to: #42"), 42)
+        self.assertEqual(extract_response_target("### Scenario\n\n#42"), 42)
         self.assertEqual(extract_player_name({"name": "Ada", "login": "octo"}), "Ada")
         self.assertEqual(verdict_label_from_text("Ada wins.\n\n( ❤️ Ada survived )"), SURVIVED_LABEL)
         self.assertEqual(verdict_label_from_text("Ada slips.\n\n( 💀 Ada died )"), DIED_LABEL)

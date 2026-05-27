@@ -70,13 +70,13 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
 Scenario QR:
 
 ```text
-https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=scenario.yml&labels=game%3Ascenario&title=Scenario%3A%20&body=Prompt%3A%0A
+https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=scenario.yml&labels=game%3Ascenario&title=Scenario%3A%20&prompt=
 ```
 
 Response QR for scenario `#N`:
 
 ```text
-https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A%20&body=responds-to%3A%20%23N%0A%0AMy%20survival%20plan%3A%0A
+https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A%20&scenario=%23N&plan=
 ```
 
 Replace `N` with the scenario issue number.

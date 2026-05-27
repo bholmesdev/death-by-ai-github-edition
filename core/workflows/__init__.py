@@ -20,7 +20,10 @@ DIED_LABEL = "verdict:died"
 SCENARIO_TERMINAL_LABELS = frozenset({APPROVED_LABEL, REJECTED_LABEL})
 JUDGE_TERMINAL_LABELS = frozenset({SURVIVED_LABEL, DIED_LABEL, NO_SCENARIO_LABEL})
 
-RESPONDS_TO_RE = re.compile(r"responds-to:\s*#?(\d+)", re.IGNORECASE)
+RESPONDS_TO_RE = re.compile(
+    r"responds-to:\s*#?(\d+)|###\s*Scenario\s*\n+\s*#?(\d+)",
+    re.IGNORECASE,
+)
 
 def _owner_repo(payload: Mapping[str, Any]) -> tuple[str, str, str]:
     full_name = str(((payload.get("repository") or {}).get("full_name")) or "")
@@ -58,7 +61,10 @@ def _labels(issue: Any) -> list[str]:
 
 def extract_response_target(body: str) -> int | None:
     match = RESPONDS_TO_RE.search(body or "")
-    return int(match.group(1)) if match else None
+    if not match:
+        return None
+    value = match.group(1) or match.group(2)
+    return int(value)
 
 
 def extract_player_name(user: Any | None = None) -> str:

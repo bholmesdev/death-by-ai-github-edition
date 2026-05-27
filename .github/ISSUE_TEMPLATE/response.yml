@@ -3,15 +3,18 @@ description: Submit your survival plan.
 title: "Response: "
 labels: ["game:response"]
 body:
-  # Keep this in one textarea so the created issue body preserves the exact
-  # parseable `responds-to:` line.
-  - type: textarea
-    id: response
+  - type: input
+    id: scenario
     attributes:
-      label: Response
-      value: |
-        responds-to: #N
-
-        My survival plan:
+      label: Scenario
+      description: The scenario issue this response answers.
+      placeholder: "#N"
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Survival plan
+      placeholder: "I would..."
     validations:
       required: true
