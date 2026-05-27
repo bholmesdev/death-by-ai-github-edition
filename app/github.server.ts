@@ -139,8 +139,10 @@ export async function createResponseIssue(input: {
   displayName: string;
   response: string;
 }): Promise<CreatedIssue> {
+  const scenario = await getScenario(input.scenarioNumber);
+  const scenarioTitle = scenario ? cleanScenarioTitle(scenario.title) : `#${input.scenarioNumber}`;
   return createIssue({
-    title: `Response to #${input.scenarioNumber} from ${input.displayName}`,
+    title: `Response to ${scenarioTitle} from ${input.displayName}`,
     body: [
       "### Scenario",
       "",
@@ -407,6 +409,9 @@ function normalizePrivateKey(privateKey: string) {
 function truncateForTitle(value: string) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length > 70 ? `${normalized.slice(0, 67)}...` : normalized;
+}
+function cleanScenarioTitle(title: string) {
+  return title.replace(/^Scenario:\s*/i, "").trim() || title.trim();
 }
 
 function appUrl(path: string, origin?: string) {
