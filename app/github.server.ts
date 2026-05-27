@@ -188,16 +188,6 @@ async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | 
   };
 }
 
-async function applyIssueLabels(issueNumber: number, labels: string[]) {
-  if (!labels.length) return;
-  await writeRequest<{ labels: GitHubIssue["labels"] }>(
-    `/repos/${owner}/${repo}/issues/${issueNumber}/labels`,
-    {
-      method: "POST",
-      body: JSON.stringify({ labels }),
-    },
-  );
-}
 
 async function getVerdictComment(issueNumber: number, verdict: Verdict) {
   const comments = await cached(`comments:${issueNumber}`, 3000, () =>
@@ -250,7 +240,6 @@ async function createIssue(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
-  await applyIssueLabels(created.number, input.labels);
 
   cache.clear();
   return {

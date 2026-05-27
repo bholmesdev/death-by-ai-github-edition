@@ -69,7 +69,6 @@ def payload(label, body="", number=7):
         },
     }
 
-
 class GameWorkflowTests(unittest.TestCase):
     def test_routes_game_labels(self):
         self.assertEqual(route_event("issues", payload("game:scenario")).workflow, WORKFLOW_SCENARIO_MODERATOR)
