@@ -50,6 +50,19 @@ export function PoweredByWarp({ className }: { className?: string }) {
   );
 }
 
+/** Inline "Powered by Oz agents" lockup with the Warp mark. Inherits the
+ * current text color, so it adapts to the projector's light/dark phases. */
+export function PoweredByOz({ className }: { className?: string }) {
+  return (
+    <div className={`flex items-center gap-2 ${className ?? ""}`}>
+      <WarpMark className="h-4 w-auto shrink-0" />
+      <span className="text-xs uppercase tracking-wider">
+        Powered by Oz agents
+      </span>
+    </div>
+  );
+}
+
 /** Inline attribution crediting the Warp judge agent. */
 export function JudgedByWarp({ className }: { className?: string }) {
   return (

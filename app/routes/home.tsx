@@ -16,7 +16,7 @@ import MingcuteSkullLine from "~icons/mingcute/skull-line";
 import MingcuteCheckLine from "~icons/mingcute/check-line";
 
 import { Spiral } from "../components/spiral";
-import { JudgedByWarp, PoweredByWarp, WarpMark } from "../components/warp-brand";
+import { JudgedByWarp, PoweredByOz, PoweredByWarp } from "../components/warp-brand";
 import {
   closeResponse,
   encodeGameState,
@@ -423,7 +423,7 @@ function GameFooter({
   return (
     <BottomBar light={light}>
       <div className="flex min-w-0 flex-1 items-center justify-start gap-3">
-        <WarpMark className="h-4 w-auto shrink-0 opacity-40" />
+        <PoweredByOz className="shrink-0" />
         <ScoreStrip scores={scores} />
       </div>
       {children ? <div className="flex shrink-0 justify-center gap-3">{children}</div> : null}
