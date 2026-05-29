@@ -78,7 +78,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "close-response") closeResponse();
   if (intent === "reveal-response") await revealResponse(String(formData.get("responseId")));
   if (intent === "next-round") await nextRound();
-  if (intent === "end-game") endGame();
+  if (intent === "end-game") await endGame();
 
   if (intent === "noop") return getGameSnapshot(origin);
 
