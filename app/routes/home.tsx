@@ -546,15 +546,34 @@ function RevealView({
   roundNumber: number;
   scores: PlayerScore[];
 }) {
-  if (selectedResponse && selectedSegments) {
+  const revealSubmitter = useFetcher<typeof action>();
+  const gameParam = useGameParam();
+  const [localSelectedResponse, setLocalSelectedResponse] = useState<ResponseVerdict | null>(
+    selectedResponse ?? null,
+  );
+  const localSelectedSegments = localSelectedResponse ? splitReveal(localSelectedResponse.body) : null;
+
+  useEffect(() => {
+    setLocalSelectedResponse(null);
+  }, [roundNumber]);
+
+  if (localSelectedResponse && localSelectedSegments) {
     return (
       <div className="flex flex-1 flex-col">
         <RevealPlayer
-          response={selectedResponse}
+          response={localSelectedResponse}
           visibleSegments={visibleSegments}
-          segments={selectedSegments.segments}
-          footer={selectedSegments.footer}
+          segments={localSelectedSegments.segments}
+          footer={localSelectedSegments.footer}
           pendingIntent={pendingIntent}
+          onBack={() => setLocalSelectedResponse(null)}
+          onComplete={() => {
+            setLocalSelectedResponse(null);
+            revealSubmitter.submit(
+              { intent: "reveal-response", responseId: localSelectedResponse.id, game: gameParam },
+              { method: "post" },
+            );
+          }}
         />
       </div>
     );
@@ -577,6 +596,7 @@ function RevealView({
             title="From previous round"
             responses={stragglers}
             pendingResponseId={pendingResponseId}
+            onSelect={setLocalSelectedResponse}
           />
         ) : null}
 
@@ -585,6 +605,7 @@ function RevealView({
           responses={readyResponses}
           pendingResponseId={pendingResponseId}
           emptyMessage="Waiting for the judge to weigh in..."
+          onSelect={setLocalSelectedResponse}
         />
 
         {revealedResponses.length ? (
@@ -606,11 +627,13 @@ function ResponseGrid({
   responses,
   pendingResponseId,
   emptyMessage,
+  onSelect,
 }: {
   title: string;
   responses: ResponseVerdict[];
   pendingResponseId: string | null;
   emptyMessage?: string;
+  onSelect: (response: ResponseVerdict) => void;
 }) {
 
   return (
@@ -621,13 +644,11 @@ function ResponseGrid({
       {responses.length ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {responses.map((response) => (
-            <Form key={response.id} method="post" className="contents">
-              <input type="hidden" name="intent" value="select-response" />
-              <GameParamInput />
-              <input type="hidden" name="responseId" value={response.id} />
+            <div key={response.id} className="contents">
               <button
-                type="submit"
+                type="button"
                 disabled={pendingResponseId === response.id}
+                onClick={() => onSelect(response)}
                 className="group flex flex-col items-center gap-3 rounded-2xl border-2 border-white/40 bg-black/20 p-4 text-center transition hover:-translate-y-1 hover:border-dba-yellow hover:bg-black/30 disabled:opacity-60"
               >
                 <img
@@ -640,7 +661,7 @@ function ResponseGrid({
                   Issue #{response.issueNumber}
                 </span>
               </button>
-            </Form>
+            </div>
           ))}
         </div>
       ) : (
@@ -690,20 +711,20 @@ function RevealPlayer({
   segments,
   footer,
   pendingIntent,
+  onBack,
+  onComplete,
 }: {
   response: ResponseVerdict;
   visibleSegments: number;
   segments: string[];
   footer: string;
   pendingIntent: string | null;
+  onBack: () => void;
+  onComplete: () => void;
 }) {
   const [localSegments, setLocalSegments] = useState(visibleSegments || 1);
-  const submit = useSubmit();
-  const gameParam = useGameParam();
   const shownSegments = segments.slice(0, Math.min(localSegments, segments.length));
   const showFooter = localSegments > segments.length;
-  const isClosing = pendingIntent === "close-response";
-  const isRevealing = pendingIntent === "reveal-response";
   const survived = response.verdict === "survived";
 
   useEffect(() => {
@@ -721,12 +742,12 @@ function RevealPlayer({
         return;
       }
 
-      submit({ intent: "reveal-response", responseId: response.id, game: gameParam }, { method: "post" });
+      onComplete();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [gameParam, localSegments, response.id, segments.length, submit]);
+  }, [localSegments, onComplete, segments.length]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -767,23 +788,26 @@ function RevealPlayer({
 
       <BottomBar light>
         <div className="flex flex-1 justify-start">
-          <SecondaryButton intent="close-response" pendingIntent={pendingIntent} light>
-            {isClosing ? <Spinner /> : null} Back
-          </SecondaryButton>
+          <button
+            type="button"
+            onClick={onBack}
+            className="font-display inline-flex items-center gap-2 rounded-full bg-black/10 px-5 py-3 text-base text-black hover:bg-black/20 disabled:opacity-60"
+          >
+            Back
+          </button>
         </div>
         <button
           type="button"
-          disabled={isRevealing}
           className="font-display inline-flex min-w-80 items-center justify-center gap-3 rounded-full bg-dba-yellow px-12 py-4 text-3xl text-dba-ink shadow-[0_4px_0_rgba(0,0,0,0.18)] hover:brightness-110 disabled:opacity-60"
           onClick={() => {
             if (localSegments <= segments.length) {
               setLocalSegments((count) => count + 1);
               return;
             }
-            submit({ intent: "reveal-response", responseId: response.id, game: gameParam }, { method: "post" });
+            onComplete();
           }}
         >
-          {isRevealing ? <Spinner /> : <MingcuteRightLine className="text-2xl" />}
+          <MingcuteRightLine className="text-2xl" />
           {showFooter ? "Close story" : "Continue"}
         </button>
         <div className="flex flex-1 justify-end">
