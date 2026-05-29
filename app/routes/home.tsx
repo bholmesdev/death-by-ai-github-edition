@@ -103,7 +103,11 @@ export default function Home() {
     (response) => response.id === liveGame.reveal.selectedResponseId,
   );
   const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body) : null;
-  const isLightPhase = liveGame.phase === "revealing" && Boolean(selectedResponse);
+  // The reveal story view is driven by RevealView's local selection state (set on
+  // card click), not the server-synced selectedResponseId, so it reports up when a
+  // story is on screen. Use that to switch the backdrop to its light theme.
+  const [storyActive, setStoryActive] = useState(false);
+  const isLightPhase = liveGame.phase === "revealing" && storyActive;
 
   useEffect(() => {
     setAcceptedPollGame(null);
@@ -199,6 +203,7 @@ export default function Home() {
             pendingIntent={pendingIntent}
             roundNumber={liveGame.roundNumber}
             scores={liveGame.scores}
+            onStoryActiveChange={setStoryActive}
           />
         ) : null}
       </div>
@@ -533,6 +538,7 @@ function RevealView({
   pendingIntent,
   roundNumber,
   scores,
+  onStoryActiveChange,
 }: {
   prompt: string;
   readyResponses: ResponseVerdict[];
@@ -544,6 +550,7 @@ function RevealView({
   pendingIntent: string | null;
   roundNumber: number;
   scores: PlayerScore[];
+  onStoryActiveChange: (active: boolean) => void;
 }) {
   const revealSubmitter = useFetcher<typeof action>();
   const gameParam = useGameParam();
@@ -561,6 +568,13 @@ function RevealView({
     ...revealedResponses,
     ...readyResponses.filter((response) => localRevealedIds.has(response.id)),
   ];
+  const storyActive = Boolean(localSelectedResponse && localSelectedSegments);
+
+  useEffect(() => {
+    onStoryActiveChange(storyActive);
+  }, [storyActive, onStoryActiveChange]);
+
+  useEffect(() => () => onStoryActiveChange(false), [onStoryActiveChange]);
 
   useEffect(() => {
     setLocalSelectedResponse(null);
