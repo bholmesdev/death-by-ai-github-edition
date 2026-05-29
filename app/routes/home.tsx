@@ -16,6 +16,7 @@ import MingcuteSkullLine from "~icons/mingcute/skull-line";
 import MingcuteCheckLine from "~icons/mingcute/check-line";
 
 import { Spiral } from "../components/spiral";
+import { JudgedByWarp, PoweredByWarp, WarpMark } from "../components/warp-brand";
 import {
   closeResponse,
   encodeGameState,
@@ -223,6 +224,8 @@ function IdleView({ pendingIntent }: { pendingIntent: string | null }) {
           <MingcutePlayLine className="text-2xl" /> Start game
         </PrimaryButton>
       </div>
+
+      <PoweredByWarp className="mt-20" />
     </div>
   );
 }
@@ -260,6 +263,8 @@ function EndedView({
           <MingcutePlayLine className="text-2xl" /> Start new game
         </PrimaryButton>
       </div>
+
+      <PoweredByWarp className="mt-16" />
     </div>
   );
 }
@@ -417,7 +422,8 @@ function GameFooter({
 }) {
   return (
     <BottomBar light={light}>
-      <div className="flex min-w-0 flex-1 justify-start">
+      <div className="flex min-w-0 flex-1 items-center justify-start gap-3">
+        <WarpMark className="h-4 w-auto shrink-0 opacity-40" />
         <ScoreStrip scores={scores} />
       </div>
       {children ? <div className="flex shrink-0 justify-center gap-3">{children}</div> : null}
@@ -798,6 +804,7 @@ function RevealPlayer({
               Issue #{response.issueNumber}
             </p>
           </div>
+          <JudgedByWarp className="ml-auto" />
         </div>
 
         <div className="relative flex-1 overflow-auto rounded-3xl bg-white p-6 text-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] md:p-8">
