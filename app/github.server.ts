@@ -240,6 +240,8 @@ async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | 
     playerName: parsePlayerName(issue.body) ?? issue.user?.login ?? "Anonymous",
     avatarUrl: getPlayerAvatarUrl(issue.body),
     body: cleanVerdictBody(comment?.body ?? issue.body ?? ""),
+    responseText: parseSection(issue.body, "Survival plan") ?? "",
+    issueUrl: issue.html_url,
     verdict,
     arrivedAt: Date.parse(comment?.created_at ?? issue.created_at),
   };

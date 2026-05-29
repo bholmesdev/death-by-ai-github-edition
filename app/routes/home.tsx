@@ -25,6 +25,7 @@ import {
   nextRound,
   revealResponse,
   selectResponse,
+  shuffleScenario,
   startGame,
   startReveal,
   startTimer,
@@ -64,6 +65,7 @@ export async function action({ request }: Route.ActionArgs) {
   const origin = new URL(request.url).origin;
 
   if (intent === "start-game") await startGame();
+  if (intent === "shuffle") await shuffleScenario();
   if (intent === "start-timer") {
     await startTimer(
       Number(formData.get("durationSeconds") ?? 240),
@@ -96,7 +98,7 @@ export default function Home() {
     navigation.state !== "idle" ? String(navigation.formData?.get("intent") ?? "") : null;
   const pendingResponseId =
     pendingIntent === "select-response" ? String(navigation.formData?.get("responseId") ?? "") : null;
-  const selectedResponse = [...liveGame.stragglers, ...liveGame.readyResponses, ...liveGame.revealedResponses].find(
+  const selectedResponse = [...liveGame.readyResponses, ...liveGame.revealedResponses].find(
     (response) => response.id === liveGame.reveal.selectedResponseId,
   );
   const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body) : null;
@@ -187,7 +189,6 @@ export default function Home() {
         {liveGame.phase === "revealing" && liveGame.currentScenario ? (
           <RevealView
             prompt={liveGame.currentScenario.prompt}
-            stragglers={liveGame.stragglers}
             readyResponses={liveGame.readyResponses}
             revealedResponses={liveGame.revealedResponses}
             pendingResponseId={pendingResponseId}
@@ -306,19 +307,9 @@ function ConfirmView({
   scores: PlayerScore[];
 }) {
   const gameParam = useGameParam();
-  const initialIndex = Math.max(
-    0,
-    scenarioDeck.findIndex((deckScenario) => deckScenario.number === scenario?.number),
-  );
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const isShuffling = pendingIntent === "shuffle";
 
-  useEffect(() => {
-    setSelectedIndex(initialIndex);
-  }, [initialIndex, scenarioDeck]);
-
-  const selectedScenario = scenarioDeck[selectedIndex] ?? scenario;
-
-  if (!selectedScenario) {
+  if (!scenario) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         <p className="font-display text-dba-yellow text-lg tracking-[0.3em] uppercase">
@@ -356,24 +347,28 @@ function ConfirmView({
           Prompt
         </p>
         <h2 className="font-display mt-4 text-5xl leading-tight md:text-7xl drop-shadow-[0_6px_0_rgba(0,0,0,0.25)]">
-          {selectedScenario.prompt}
+          {scenario.prompt}
         </h2>
       </div>
 
       <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
-        <button
-          type="button"
-          className="font-display inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-base text-white hover:bg-white/25 disabled:opacity-60"
-          disabled={scenarioDeck.length < 2}
-          onClick={() => setSelectedIndex((index) => (index + 1) % scenarioDeck.length)}
-        >
-          <MingcuteShuffle2Line className="text-xl" /> Shuffle
-        </button>
+        <Form method="post">
+          <input type="hidden" name="intent" value="shuffle" />
+          <input type="hidden" name="game" value={gameParam} />
+          <button
+            type="submit"
+            className="font-display inline-flex items-center gap-2 rounded-full bg-white/15 px-5 py-3 text-base text-white hover:bg-white/25 disabled:opacity-60"
+            disabled={isShuffling || scenarioDeck.length < 2}
+          >
+            {isShuffling ? <Spinner /> : <MingcuteShuffle2Line className="text-xl" />}
+            {isShuffling ? "Shuffling..." : "Shuffle"}
+          </button>
+        </Form>
 
         <Form method="post" className="flex items-center gap-3 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm">
           <input type="hidden" name="intent" value="start-timer" />
           <input type="hidden" name="game" value={gameParam} />
-          <input type="hidden" name="scenarioNumber" value={selectedScenario.number} />
+          <input type="hidden" name="scenarioNumber" value={scenario.number} />
           <label className="flex items-center gap-2 text-sm uppercase tracking-wider text-white/80">
             Timer
             <input
@@ -523,7 +518,6 @@ function SubmittingView({
 
 function RevealView({
   prompt,
-  stragglers,
   readyResponses,
   revealedResponses,
   pendingResponseId,
@@ -535,7 +529,6 @@ function RevealView({
   scores,
 }: {
   prompt: string;
-  stragglers: ResponseVerdict[];
   readyResponses: ResponseVerdict[];
   revealedResponses: ResponseVerdict[];
   pendingResponseId: string | null;
@@ -612,15 +605,6 @@ function RevealView({
           </p>
           <h2 className="font-display mt-3 text-4xl md:text-5xl">Pick a response</h2>
         </div>
-
-        {stragglers.length ? (
-          <ResponseGrid
-            title="From previous round"
-            responses={stragglers}
-            pendingResponseId={pendingResponseId}
-            onSelect={setLocalSelectedResponse}
-          />
-        ) : null}
 
         <ResponseGrid
           title="Ready to reveal"
@@ -747,6 +731,7 @@ function RevealPlayer({
   onComplete: () => void;
 }) {
   const [localSegments, setLocalSegments] = useState(visibleSegments || 1);
+  const [showResponse, setShowResponse] = useState(false);
   const didReveal = useRef(false);
   const shownSegments = segments.slice(0, Math.min(localSegments, segments.length));
   const showFooter = localSegments > segments.length;
@@ -754,6 +739,7 @@ function RevealPlayer({
 
   useEffect(() => {
     setLocalSegments(visibleSegments || 1);
+    setShowResponse(false);
     didReveal.current = false;
   }, [response.id, visibleSegments]);
 
@@ -784,21 +770,52 @@ function RevealPlayer({
   return (
     <div className="flex flex-1 flex-col">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-6 py-8">
-        <div className="mb-6 flex items-center gap-3">
-          <img
-            alt=""
-            className="size-12 rounded-full border-2 border-black/30"
-            src={response.avatarUrl}
-          />
-          <div>
-            <p className="font-display text-xl text-black">
-              {response.playerName} tries to&hellip;
-            </p>
-            <p className="text-xs uppercase tracking-wider text-black/60">
-              Issue #{response.issueNumber}
-            </p>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <img
+              alt=""
+              className="size-12 rounded-full border-2 border-black/30"
+              src={response.avatarUrl}
+            />
+            <div>
+              <p className="font-display text-xl text-black">
+                {response.playerName} tries to&hellip;
+              </p>
+              <p className="text-xs uppercase tracking-wider text-black/60">
+                Issue #{response.issueNumber}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowResponse((shown) => !shown)}
+              className="font-display inline-flex items-center gap-2 rounded-full bg-black/10 px-4 py-2 text-sm text-black hover:bg-black/20"
+            >
+              {showResponse ? "Hide response" : "Show response"}
+            </button>
+            <a
+              href={response.issueUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-display inline-flex items-center gap-2 rounded-full bg-black/10 px-4 py-2 text-sm text-black hover:bg-black/20"
+            >
+              View on GitHub
+            </a>
           </div>
         </div>
+
+        {showResponse ? (
+          <div className="mb-4 rounded-2xl border-2 border-black/15 bg-black/[0.03] p-4">
+            <p className="mb-2 text-xs uppercase tracking-wider text-black/50">
+              Original response
+            </p>
+            <p className="whitespace-pre-wrap text-base leading-relaxed text-black/80">
+              {response.responseText || "No response text provided."}
+            </p>
+          </div>
+        ) : null}
 
         <div className="relative flex-1 overflow-auto rounded-3xl bg-white p-6 text-black shadow-[0_20px_60px_-20px_rgba(0,0,0,0.4)] md:p-8">
           <div className="space-y-3 text-base leading-relaxed md:text-lg">
