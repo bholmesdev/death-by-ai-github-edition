@@ -1,5 +1,13 @@
-import { Form, useFetcher, useLoaderData, useNavigation, useSubmit } from "react-router";
-import { useEffect, useRef, useState } from "react";
+import {
+  Form,
+  redirect,
+  useFetcher,
+  useLoaderData,
+  useLocation,
+  useNavigation,
+  useSubmit,
+} from "react-router";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
 import MingcuteRightLine from "~icons/mingcute/right-line";
@@ -10,8 +18,10 @@ import MingcuteCheckLine from "~icons/mingcute/check-line";
 import { Spiral } from "../components/spiral";
 import {
   closeResponse,
+  encodeGameState,
   endGame,
   getGameSnapshot,
+  hydrateGameState,
   nextRound,
   revealResponse,
   selectResponse,
@@ -27,6 +37,8 @@ import {
 import { splitReveal } from "../reveal";
 import type { Route } from "./+types/home";
 
+const GameParamContext = createContext("");
+
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "Death by AI: GitHub Edition" },
@@ -36,6 +48,7 @@ export function meta({}: Route.MetaArgs) {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
+  hydrateGameState(url.searchParams.get("game"));
   const demo = url.searchParams.get("demo");
   if (demo && process.env.NODE_ENV !== "production") {
     const { getDemoSnapshot } = await import("../demo-snapshots");
@@ -47,10 +60,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  hydrateGameState(String(formData.get("game") || ""));
+  const origin = new URL(request.url).origin;
 
   if (intent === "start-game") await startGame();
   if (intent === "start-timer") {
-    startTimer(
+    await startTimer(
       Number(formData.get("durationSeconds") ?? 240),
       Number(formData.get("scenarioNumber") ?? 0) || undefined,
     );
@@ -58,11 +73,13 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "start-reveal") startReveal();
   if (intent === "select-response") selectResponse(String(formData.get("responseId")));
   if (intent === "close-response") closeResponse();
-  if (intent === "reveal-response") revealResponse(String(formData.get("responseId")));
+  if (intent === "reveal-response") await revealResponse(String(formData.get("responseId")));
   if (intent === "next-round") await nextRound();
   if (intent === "end-game") endGame();
 
-  return getGameSnapshot(new URL(request.url).origin);
+  if (intent === "noop") return getGameSnapshot(origin);
+
+  return redirect(`/?game=${encodeURIComponent(encodeGameState())}`);
 }
 
 export default function Home() {
@@ -70,8 +87,10 @@ export default function Home() {
   const navigation = useNavigation();
   const poller = useFetcher<typeof action>();
   const submit = useSubmit();
+  const urlGameParam = useGameParam();
   const [acceptedPollGame, setAcceptedPollGame] = useState<typeof game | null>(null);
   const liveGame = acceptedPollGame ?? game;
+  const gameParam = liveGame.urlState || urlGameParam;
   const livePhase = liveGame.phase;
   const pendingIntent =
     navigation.state !== "idle" ? String(navigation.formData?.get("intent") ?? "") : null;
@@ -100,24 +119,25 @@ export default function Home() {
   useEffect(() => {
     if (livePhase !== "submitting" && livePhase !== "revealing") return;
     const interval = window.setInterval(() => {
-      poller.submit({ intent: "noop" }, { method: "post" });
+      poller.submit({ intent: "noop", game: gameParam }, { method: "post" });
     }, livePhase === "submitting" ? 1000 : 3000);
     return () => window.clearInterval(interval);
-  }, [livePhase, poller]);
+  }, [gameParam, livePhase, poller]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement) return;
       if (event.key.toLowerCase() === "n" && livePhase === "revealing") {
-        submit({ intent: "next-round" }, { method: "post" });
+        submit({ intent: "next-round", game: gameParam }, { method: "post" });
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [livePhase, submit]);
+  }, [gameParam, livePhase, submit]);
 
   return (
+    <GameParamContext.Provider value={gameParam}>
     <main className="relative min-h-screen overflow-hidden text-white">
       {isLightPhase ? (
         <Spiral
@@ -181,6 +201,7 @@ export default function Home() {
         ) : null}
       </div>
     </main>
+    </GameParamContext.Provider>
   );
 }
 
@@ -284,6 +305,7 @@ function ConfirmView({
   roundNumber: number;
   scores: PlayerScore[];
 }) {
+  const gameParam = useGameParam();
   const initialIndex = Math.max(
     0,
     scenarioDeck.findIndex((deckScenario) => deckScenario.number === scenario?.number),
@@ -350,6 +372,7 @@ function ConfirmView({
 
         <Form method="post" className="flex items-center gap-3 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm">
           <input type="hidden" name="intent" value="start-timer" />
+          <input type="hidden" name="game" value={gameParam} />
           <input type="hidden" name="scenarioNumber" value={selectedScenario.number} />
           <label className="flex items-center gap-2 text-sm uppercase tracking-wider text-white/80">
             Timer
@@ -600,6 +623,7 @@ function ResponseGrid({
           {responses.map((response) => (
             <Form key={response.id} method="post" className="contents">
               <input type="hidden" name="intent" value="select-response" />
+              <GameParamInput />
               <input type="hidden" name="responseId" value={response.id} />
               <button
                 type="submit"
@@ -675,6 +699,7 @@ function RevealPlayer({
 }) {
   const [localSegments, setLocalSegments] = useState(visibleSegments || 1);
   const submit = useSubmit();
+  const gameParam = useGameParam();
   const shownSegments = segments.slice(0, Math.min(localSegments, segments.length));
   const showFooter = localSegments > segments.length;
   const isClosing = pendingIntent === "close-response";
@@ -696,12 +721,12 @@ function RevealPlayer({
         return;
       }
 
-      submit({ intent: "reveal-response", responseId: response.id }, { method: "post" });
+      submit({ intent: "reveal-response", responseId: response.id, game: gameParam }, { method: "post" });
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [localSegments, response.id, segments.length, submit]);
+  }, [gameParam, localSegments, response.id, segments.length, submit]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -755,7 +780,7 @@ function RevealPlayer({
               setLocalSegments((count) => count + 1);
               return;
             }
-            submit({ intent: "reveal-response", responseId: response.id }, { method: "post" });
+            submit({ intent: "reveal-response", responseId: response.id, game: gameParam }, { method: "post" });
           }}
         >
           {isRevealing ? <Spinner /> : <MingcuteRightLine className="text-2xl" />}
@@ -926,6 +951,7 @@ function PrimaryButton({
   return (
     <Form method="post">
       <input type="hidden" name="intent" value={intent} />
+      <GameParamInput />
       <button
         type="submit"
         disabled={isPending}
@@ -960,6 +986,7 @@ function SecondaryButton({
   return (
     <Form method="post">
       <input type="hidden" name="intent" value={intent} />
+      <GameParamInput />
       <button
         type="submit"
         disabled={isPending}
@@ -970,6 +997,16 @@ function SecondaryButton({
       </button>
     </Form>
   );
+}
+
+function GameParamInput() {
+  return <input type="hidden" name="game" value={useGameParam()} />;
+}
+
+function useGameParam() {
+  const contextValue = useContext(GameParamContext);
+  const locationValue = new URLSearchParams(useLocation().search).get("game") ?? "";
+  return contextValue || locationValue;
 }
 
 function Spinner() {

@@ -63,6 +63,7 @@ const base: GameSnapshot = {
   suggestPromptUrl: "https://github.com/owner/repo/issues/new",
   repoUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition",
   submittedResponses: [],
+  urlState: "",
 };
 
 export function getDemoSnapshot(phase: string): GameSnapshot {

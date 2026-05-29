@@ -4,6 +4,7 @@ import {
   getApprovedScenarios,
   getReadyResponses,
   getRepoUrl,
+  getScenario,
   getSubmittedResponses,
   type SubmittedResponse,
   type SubmittedResponseStatus,
@@ -63,6 +64,22 @@ export type GameSnapshot = {
   suggestPromptUrl: string;
   repoUrl: string;
   submittedResponses: SubmittedResponse[];
+  urlState: string;
+};
+
+type UrlGameState = {
+  phase: GamePhase;
+  roundNumber: number;
+  currentScenario: Scenario | null;
+  scenarioDeck: Scenario[];
+  usedScenarioNumbers: number[];
+  submissionEndsAt: number | null;
+  submissionDurationSeconds: number;
+  reveal: RevealState;
+  previousRoundNumber: number | null;
+  previousRevealedResponseIds: string[];
+  scores: PlayerScore[];
+  scoredResponseIds: string[];
 };
 
 type GameState = {
@@ -146,7 +163,51 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     suggestPromptUrl: buildSuggestPromptUrl(origin),
     repoUrl: getRepoUrl(),
     submittedResponses,
+    urlState: encodeGameState(),
   };
+}
+
+export function hydrateGameState(encoded: string | null) {
+  if (!encoded) return;
+
+  try {
+    const parsed = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as UrlGameState;
+    state.phase = parsed.phase;
+    state.roundNumber = parsed.roundNumber;
+    state.currentScenario = parsed.currentScenario;
+    state.scenarioDeck = parsed.scenarioDeck;
+    state.scenarioDeckIndex = 0;
+    state.usedScenarioNumbers = new Set(parsed.usedScenarioNumbers);
+    state.submissionEndsAt = parsed.submissionEndsAt;
+    state.submissionDurationSeconds = parsed.submissionDurationSeconds;
+    state.reveal = parsed.reveal;
+    state.previousRoundNumber = parsed.previousRoundNumber;
+    state.previousRevealedResponseIds = parsed.previousRevealedResponseIds;
+    state.scoresByPlayer = new Map(parsed.scores.map((score) => [score.playerName, score]));
+    state.scoredResponseIds = new Set(parsed.scoredResponseIds);
+    state.responsesById = new Map();
+  } catch (error) {
+    console.error("Could not hydrate URL game state:", error);
+  }
+}
+
+export function encodeGameState() {
+  const urlState: UrlGameState = {
+    phase: state.phase,
+    roundNumber: state.roundNumber,
+    currentScenario: state.currentScenario,
+    scenarioDeck: state.scenarioDeck,
+    usedScenarioNumbers: [...state.usedScenarioNumbers],
+    submissionEndsAt: state.submissionEndsAt,
+    submissionDurationSeconds: state.submissionDurationSeconds,
+    reveal: state.reveal,
+    previousRoundNumber: state.previousRoundNumber,
+    previousRevealedResponseIds: state.previousRevealedResponseIds,
+    scores: [...state.scoresByPlayer.values()],
+    scoredResponseIds: [...state.scoredResponseIds],
+  };
+
+  return Buffer.from(JSON.stringify(urlState), "utf8").toString("base64url");
 }
 
 function nextScenarioFromDeck(used: Set<number>, excludeNumber?: number) {
@@ -199,8 +260,12 @@ export async function startGame() {
   resetRoundState();
 }
 
-export function startTimer(durationSeconds: number, scenarioNumber?: number) {
+export async function startTimer(durationSeconds: number, scenarioNumber?: number) {
   if (scenarioNumber) commitScenario(scenarioNumber);
+  if (!state.currentScenario && scenarioNumber) {
+    state.currentScenario = await getScenario(scenarioNumber);
+    state.roundNumber = state.roundNumber || 1;
+  }
   if (!state.currentScenario) return;
   state.phase = "submitting";
   state.submissionDurationSeconds = durationSeconds;
@@ -225,8 +290,13 @@ export function closeResponse() {
   state.reveal.visibleSegments = 0;
 }
 
-export function revealResponse(id: string) {
+export async function revealResponse(id: string) {
   if (state.phase !== "revealing") return;
+  if (!state.responsesById.has(id) && state.currentScenario) {
+    for (const response of await getReadyResponses(state.currentScenario.number)) {
+      state.responsesById.set(response.id, response);
+    }
+  }
   if (!state.reveal.revealedResponseIds.includes(id)) {
     state.reveal.revealedResponseIds.push(id);
     scoreResponse(id);
@@ -237,7 +307,7 @@ export function revealResponse(id: string) {
 
 
 export async function nextRound() {
-  scoreCurrentRound();
+  await scoreCurrentRound();
   state.previousRoundNumber = state.currentScenario?.number ?? null;
   state.previousRevealedResponseIds = [...state.reveal.revealedResponseIds];
   state.roundNumber += 1;
@@ -272,8 +342,12 @@ function resetRoundState() {
   };
 }
 
-function scoreCurrentRound() {
+async function scoreCurrentRound() {
   if (!state.currentScenario) return;
+
+  for (const response of await getReadyResponses(state.currentScenario.number)) {
+    state.responsesById.set(response.id, response);
+  }
 
   for (const response of state.responsesById.values()) {
     if (response.scenarioNumber !== state.currentScenario.number) continue;
