@@ -6,48 +6,16 @@ A live conference party game in the spirit of [Death by AI](https://deathbyai.gg
 
 A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A **response** is your survival plan. The judge agent writes a short cinematic story deciding whether you live or die.
 
-```
-                           ┌───────────────────────────────────────┐
-                           │  Anyone suggests a scenario via the   │
-                           │  app or GitHub → moderator agent      │
-                           │  labels it scenario:approved/rejected │
-                           └────────────────┬──────────────────────┘
-                                            │
-                                            ▼
-   ┌──────────────────────────────────────────────────────────────────┐
-   │ ROUND (during the event)                                         │
-   │                                                                  │
-   │  1. MC clicks "Start game" / "Next round" on the projector.      │
-   │     Projector proposes an approved scenario (fewest existing     │
-   │     responses first, random tiebreak, skipping used ones).       │
-   │     MC can shuffle to a different scenario from the deck,        │
-   │     set the timer duration, then click "Start round".            │
-   │                                                                  │
-   │  2. Scenario and a countdown timer show on screen. A QR code     │
-   │     links to the app's response form (/respond/:N). Attendees    │
-   │     fill in their name and survival plan; the app creates the    │
-   │     GitHub issue on their behalf.                                │
-   │                                                                  │
-   │  3. Each response issue triggers the judge agent. The agent      │
-   │     reads the linked scenario + the response, writes a 3-5       │
-   │     sentence cinematic verdict ending in a footer line like      │
-   │     `( ❤️  Jeff survived )` or `( 💀 Jeff died )`,                │
-   │     and applies the `verdict:survived` / `verdict:died` label.   │
-   │     The label is the projector's "ready to reveal" signal.       │
-   │                                                                  │
-   │  4. Timer ends → REVEAL phase. Projector shows a tile for each   │
-   │     response whose verdict is ready (avatar + name visible,      │
-   │     story hidden). MC clicks a tile; the story unfolds           │
-   │     sentence-by-sentence with MC presses, ending in the          │
-   │     survived/died footer.                                        │
-   │                                                                  │
-   │  5. New verdicts keep popping in during the round's reveal.      │
-   │     When the MC moves to the next round, responses still being   │
-   │     judged stay in GitHub but no longer appear on screen.        │
-   │                                                                  │
-   │  6. MC clicks "next round". Loop.                                │
-   └──────────────────────────────────────────────────────────────────┘
-```
+**Before a round:** anyone suggests a scenario via the app or GitHub, and a moderator agent labels it `scenario:approved` or `scenario:rejected`. Only approved scenarios enter the pool.
+
+**During a round (at the event):**
+
+1. The MC clicks "Start game" / "Next round" on the projector. The projector proposes an approved scenario (fewest existing responses first, random tiebreak, skipping used ones). The MC can shuffle to a different scenario from the deck, set the timer duration, then click "Start round".
+2. The scenario and a countdown timer show on screen. A QR code links to the app's response form (`/respond/:N`). Attendees fill in their name and survival plan; the app creates the GitHub issue on their behalf.
+3. Each response issue triggers the judge agent. It reads the linked scenario and the response, writes a two-paragraph cinematic verdict ending in a footer line like `( ❤️ Jeff survived )` or `( 💀 Jeff died )`, and applies the `verdict:survived` / `verdict:died` label — the projector's "ready to reveal" signal.
+4. Timer ends → reveal phase. The projector shows a tile for each response whose verdict is ready (avatar + name visible, story hidden). The MC clicks a tile; the story unfolds sentence-by-sentence with MC presses, ending in the survived/died footer.
+5. New verdicts keep popping in during the reveal. When the MC moves to the next round, responses still being judged stay in GitHub but no longer appear on screen.
+6. The MC clicks "Next round". Loop.
 
 ## Why GitHub issues for everything
 
