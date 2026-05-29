@@ -17,8 +17,11 @@ REJECTED_LABEL = "scenario:rejected"
 NO_SCENARIO_LABEL = "error:no-scenario"
 SURVIVED_LABEL = "verdict:survived"
 DIED_LABEL = "verdict:died"
+REJECTED_VERDICT_LABEL = "verdict:rejected"
 SCENARIO_TERMINAL_LABELS = frozenset({APPROVED_LABEL, REJECTED_LABEL})
-JUDGE_TERMINAL_LABELS = frozenset({SURVIVED_LABEL, DIED_LABEL, NO_SCENARIO_LABEL})
+JUDGE_TERMINAL_LABELS = frozenset(
+    {SURVIVED_LABEL, DIED_LABEL, REJECTED_VERDICT_LABEL, NO_SCENARIO_LABEL}
+)
 
 RESPONDS_TO_RE = re.compile(
     r"responds-to:\s*#?(\d+)|###\s*Scenario\s*\n+\s*#?(\d+)",
@@ -273,7 +276,10 @@ class JudgeWorkflow(BaseGameWorkflow):
             f"Scenario issue #{target_number}: {getattr(scenario, 'title', '')}\n"
             f"Scenario body:\n{getattr(scenario, 'body', '') or ''}\n\n"
             f"Response body:\n{body}\n\n"
-            "Create verdict_result.json with key verdict_comment. Do not post comments or labels."
+            "Moderate the response first using the death-by-ai-judge skill safety rules. "
+            "If it passes, create verdict_result.json with key verdict_comment. "
+            "If it fails moderation, create verdict_result.json with verdict set to REJECTED and a friendly comment. "
+            "Do not post comments or labels."
         )
         return self._dispatch(
             payload,
@@ -295,6 +301,12 @@ class JudgeWorkflow(BaseGameWorkflow):
 
     def apply_result(self, repo_handle: Any, *, context: Mapping[str, Any], run: Any, result: Mapping[str, Any], progress: Any, github_client: Any | None = None) -> None:
         issue = repo_handle.get_issue(int(context["issue_number"]))
+        if str(result.get("verdict") or "").strip().upper() == "REJECTED":
+            note = _comment(result, "comment", "body") or "This response was rejected by moderation."
+            issue.add_to_labels(REJECTED_VERDICT_LABEL)
+            issue.create_comment(note)
+            progress.complete("Response rejected by moderation.")
+            return
         comment = _comment(result, "verdict_comment", "comment", "body")
         if not comment:
             raise ValueError("verdict_result.json missing verdict_comment")
@@ -312,6 +324,7 @@ def build_workflow_registry() -> dict[str, BaseGameWorkflow]:
 
 __all__ = [
     "JudgeWorkflow",
+    "REJECTED_VERDICT_LABEL",
     "ScenarioModeratorWorkflow",
     "build_workflow_registry",
     "extract_player_name",
