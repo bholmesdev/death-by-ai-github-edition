@@ -38,6 +38,7 @@ const token = process.env.GITHUB_TOKEN;
 const cache = new Map<string, CacheEntry<unknown>>();
 const scenarioLabel = "game:scenario";
 const responseLabel = "game:response";
+const rejectedLabel = "verdict:rejected";
 const placeholderAvatarUrl = "/placeholder-avatar.svg";
 
 export async function getApprovedScenarios(): Promise<Scenario[]> {
@@ -76,6 +77,9 @@ export async function getSubmittedResponses(scenarioNumber: number): Promise<Sub
     const issues = await listResponseIssues();
     return issues
       .filter((issue) => parseScenarioNumber(issue.body) === scenarioNumber)
+      // Hide moderated-out responses from the projector entirely so they never
+      // get stuck showing "Judging…".
+      .filter((issue) => !isResponseRejected(issue))
       .map((issue) => {
         const verdict = getVerdict(issue);
         const status: SubmittedResponseStatus =
@@ -99,6 +103,12 @@ export async function getSubmittedResponses(scenarioNumber: number): Promise<Sub
       })
       .sort((a, b) => a.issueNumber - b.issueNumber);
   });
+}
+
+function isResponseRejected(issue: GitHubIssue) {
+  return issue.labels
+    .map((label) => (typeof label === "string" ? label : label.name))
+    .includes(rejectedLabel);
 }
 
 export async function getReadyResponses(scenarioNumber: number): Promise<ResponseVerdict[]> {
@@ -183,18 +193,21 @@ export async function getScenario(scenarioNumber: number): Promise<Scenario | nu
 
 export async function createResponseIssue(input: {
   scenarioNumber: number;
-  displayName: string;
-  githubUsername?: string;
+  githubUsername: string;
   response: string;
 }): Promise<CreatedIssue> {
   const scenario = await getScenario(input.scenarioNumber);
   if (!scenario) {
     throw new Error(`Scenario #${input.scenarioNumber} is not accepting responses.`);
   }
-  const scenarioTitle = scenario ? cleanScenarioTitle(scenario.title) : `#${input.scenarioNumber}`;
-  const githubUser = input.githubUsername ? await getGitHubUser(input.githubUsername) : null;
+  const githubUser = await getGitHubUser(input.githubUsername);
+  if (!githubUser) {
+    throw new Error(`GitHub user @${input.githubUsername} does not exist.`);
+  }
+  const displayName = githubUser.name ?? githubUser.login;
+  const scenarioTitle = cleanScenarioTitle(scenario.title);
   return createIssue({
-    title: `Response to ${scenarioTitle} from ${input.displayName}`,
+    title: `Response to ${scenarioTitle} from ${displayName}`,
     body: [
       "### Scenario",
       "",
@@ -202,11 +215,16 @@ export async function createResponseIssue(input: {
       "",
       "### Player",
       "",
-      input.displayName,
+      displayName,
       "",
-      ...(githubUser
-        ? ["### GitHub username", "", githubUser.login, "", "### GitHub avatar URL", "", githubUser.avatarUrl, ""]
-        : []),
+      "### GitHub username",
+      "",
+      githubUser.login,
+      "",
+      "### GitHub avatar URL",
+      "",
+      githubUser.avatarUrl,
+      "",
       "### Survival plan",
       "",
       input.response,
@@ -216,12 +234,17 @@ export async function createResponseIssue(input: {
 }
 
 export async function createScenarioIssue(input: {
-  displayName: string;
+  githubUsername: string;
   prompt: string;
 }): Promise<CreatedIssue> {
+  const githubUser = await getGitHubUser(input.githubUsername);
+  if (!githubUser) {
+    throw new Error(`GitHub user @${input.githubUsername} does not exist.`);
+  }
+  const displayName = githubUser.name ?? githubUser.login;
   return createIssue({
     title: `Scenario: ${truncateForTitle(input.prompt)}`,
-    body: ["### Prompt", "", input.prompt, "", "### Suggested by", "", input.displayName].join("\n"),
+    body: ["### Prompt", "", input.prompt, "", "### Suggested by", "", displayName].join("\n"),
     labels: [scenarioLabel],
   });
 }
@@ -409,14 +432,13 @@ function cleanScenarioPrompt(body: string | null, fallback: string) {
   const inlinePrompt = lines
     .map((line) => line.trim().match(/^#{0,6}\s*prompt:\s*(.+)$/i)?.[1])
     .find((value): value is string => Boolean(value));
-  const prompt =
-    inlinePrompt ??
-    (promptLineIndex >= 0
-      ? lines
-          .slice(promptLineIndex + 1)
-          .filter((line) => !/^#{1,6}\s+/.test(line.trim()))
-          .join("\n")
-      : lines.filter((line) => !/^#{1,6}\s+/.test(line.trim())).join("\n"));
+
+  // Only keep the Prompt section. Stop at the next heading (e.g. `### Suggested by`)
+  // so the suggester's name never leaks into the prompt text.
+  const afterPrompt = promptLineIndex >= 0 ? lines.slice(promptLineIndex + 1) : lines;
+  const nextHeadingIndex = afterPrompt.findIndex((line) => /^#{1,6}\s+/.test(line.trim()));
+  const promptLines = nextHeadingIndex >= 0 ? afterPrompt.slice(0, nextHeadingIndex) : afterPrompt;
+  const prompt = inlinePrompt ?? promptLines.join("\n");
 
   return (prompt.trim() || fallback).trim();
 }
@@ -472,13 +494,15 @@ function normalizePrivateKey(privateKey: string) {
   return privateKey.includes("\\n") ? privateKey.replace(/\\n/g, "\n") : privateKey;
 }
 
-async function getGitHubUser(username: string) {
+export async function getGitHubUser(username: string) {
   const normalized = username.trim().replace(/^@/, "");
   if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(normalized)) return null;
 
   try {
-    const user = await request<{ login: string; avatar_url: string }>(`/users/${normalized}`);
-    return { login: user.login, avatarUrl: user.avatar_url };
+    const user = await request<{ login: string; name: string | null; avatar_url: string }>(
+      `/users/${normalized}`,
+    );
+    return { login: user.login, name: user.name ?? null, avatarUrl: user.avatar_url };
   } catch {
     return null;
   }
