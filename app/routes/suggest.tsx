@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Form, useActionData, useNavigation } from "react-router";
 
-import { createScenarioIssue } from "../github.server";
+import { createScenarioIssue, getGitHubUser } from "../github.server";
 import {
   cleanInput,
   enforceSubmissionRateLimit,
   isHoneypotFilled,
   type SubmissionResult,
-  validateDisplayName,
+  validateGitHubUsername,
   validateLongText,
 } from "../submissions.server";
 import type { Route } from "./+types/suggest";
@@ -26,13 +26,17 @@ export async function action({ request }: Route.ActionArgs): Promise<SubmissionR
   const rateLimitError = await enforceSubmissionRateLimit(request);
   if (rateLimitError) return { ok: false, error: rateLimitError };
 
-  const displayName = cleanInput(formData.get("displayName"));
+  const githubUsername = cleanInput(formData.get("githubUsername")).replace(/^@/, "");
   const prompt = cleanInput(formData.get("prompt"));
-  const validationError = validateDisplayName(displayName) || validateLongText(prompt, "Scenario");
+  const validationError =
+    validateGitHubUsername(githubUsername) || validateLongText(prompt, "Scenario");
   if (validationError) return { ok: false, error: validationError };
 
   try {
-    const issue = await createScenarioIssue({ displayName, prompt });
+    if (!(await getGitHubUser(githubUsername))) {
+      return { ok: false, error: `No GitHub user found for @${githubUsername}.` };
+    }
+    const issue = await createScenarioIssue({ githubUsername, prompt });
     return { ok: true, issueNumber: issue.number, issueUrl: issue.url };
   } catch (error) {
     console.error("Could not create scenario issue:", error);
@@ -44,15 +48,19 @@ export default function Suggest() {
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
-  const [displayName, setDisplayName] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
+  const { check, verify, reset } = useGitHubHandleCheck();
+  const normalizedHandle = githubUsername.trim().replace(/^@/, "");
+  const submitDisabled =
+    isSubmitting || normalizedHandle.length === 0 || check.status === "invalid";
 
   useEffect(() => {
-    setDisplayName(window.localStorage.getItem("dba-player-name") ?? "");
+    setGithubUsername(window.localStorage.getItem("dba-github-username") ?? "");
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("dba-player-name", displayName);
-  }, [displayName]);
+    window.localStorage.setItem("dba-github-username", githubUsername);
+  }, [githubUsername]);
 
   return (
     <main className="min-h-screen bg-dba-purple-500 px-5 py-8 text-white">
@@ -79,16 +87,22 @@ export default function Suggest() {
           ) : (
             <Form method="post" className="space-y-4">
               <label className="block">
-                <span className="text-sm font-medium">Name</span>
+                <span className="text-sm font-medium">GitHub username</span>
                 <input
                   className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
-                  maxLength={40}
-                  name="displayName"
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
+                  maxLength={39}
+                  name="githubUsername"
+                  placeholder="@octocat"
+                  value={githubUsername}
+                  onChange={(event) => {
+                    setGithubUsername(event.target.value);
+                    reset();
+                  }}
+                  onBlur={(event) => verify(event.target.value)}
                   required
                 />
               </label>
+              <HandleBanner check={check} />
               <label className="hidden">
                 Website
                 <input name="website" tabIndex={-1} autoComplete="off" />
@@ -109,7 +123,7 @@ export default function Suggest() {
               ) : null}
               <button
                 className="font-display w-full rounded-full bg-dba-yellow px-6 py-3 text-xl text-dba-ink disabled:opacity-60"
-                disabled={isSubmitting}
+                disabled={submitDisabled}
                 type="submit"
               >
                 {isSubmitting ? "Submitting..." : "Submit scenario"}
@@ -120,4 +134,61 @@ export default function Suggest() {
       </div>
     </main>
   );
+}
+
+type HandleCheck =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "valid"; name: string }
+  | { status: "invalid" };
+
+function useGitHubHandleCheck() {
+  const [check, setCheck] = useState<HandleCheck>({ status: "idle" });
+
+  const verify = useCallback(async (rawHandle: string) => {
+    const handle = rawHandle.trim().replace(/^@/, "");
+    if (!handle) {
+      setCheck({ status: "idle" });
+      return;
+    }
+    setCheck({ status: "checking" });
+    try {
+      const response = await fetch(`/api/github-user?username=${encodeURIComponent(handle)}`);
+      const data = (await response.json()) as { exists: boolean; login?: string; name?: string };
+      setCheck(
+        data.exists
+          ? { status: "valid", name: data.name ?? data.login ?? handle }
+          : { status: "invalid" },
+      );
+    } catch {
+      setCheck({ status: "idle" });
+    }
+  }, []);
+
+  const reset = useCallback(() => setCheck({ status: "idle" }), []);
+
+  return { check, verify, reset };
+}
+
+function HandleBanner({ check }: { check: HandleCheck }) {
+  if (check.status === "checking") {
+    return (
+      <p className="rounded-xl bg-white/10 px-3 py-2 text-sm text-white/70">Checking GitHub username…</p>
+    );
+  }
+  if (check.status === "valid") {
+    return (
+      <p className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm text-emerald-100">
+        Suggesting as <span className="font-medium">{check.name}</span>.
+      </p>
+    );
+  }
+  if (check.status === "invalid") {
+    return (
+      <p className="rounded-xl bg-red-500/30 px-3 py-2 text-sm">
+        No GitHub user found. Check the spelling and try again.
+      </p>
+    );
+  }
+  return null;
 }

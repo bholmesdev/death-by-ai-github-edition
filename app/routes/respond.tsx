@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
-import { createResponseIssue, getScenario } from "../github.server";
+import { createResponseIssue, getGitHubUser, getScenario } from "../github.server";
 import {
   cleanInput,
   enforceSubmissionRateLimit,
   isHoneypotFilled,
   type SubmissionResult,
-  validateDisplayName,
+  validateGitHubUsername,
   validateLongText,
 } from "../submissions.server";
 import type { Route } from "./+types/respond";
@@ -43,18 +43,20 @@ export async function action({ request, params }: Route.ActionArgs): Promise<Sub
   const rateLimitError = await enforceSubmissionRateLimit(request);
   if (rateLimitError) return { ok: false, error: rateLimitError };
 
-  const displayName = cleanInput(formData.get("displayName"));
   const githubUsername = cleanInput(formData.get("githubUsername")).replace(/^@/, "");
   const response = cleanInput(formData.get("response"));
   const validationError =
-    validateDisplayName(displayName) || validateLongText(response, "Response");
+    validateGitHubUsername(githubUsername) || validateLongText(response, "Response");
   if (validationError) return { ok: false, error: validationError };
 
   try {
     if (!(await getScenario(scenarioNumber))) {
       return { ok: false, error: "This scenario is not accepting responses." };
     }
-    const issue = await createResponseIssue({ scenarioNumber, displayName, githubUsername, response });
+    if (!(await getGitHubUser(githubUsername))) {
+      return { ok: false, error: `No GitHub user found for @${githubUsername}.` };
+    }
+    const issue = await createResponseIssue({ scenarioNumber, githubUsername, response });
     return { ok: true, issueNumber: issue.number, issueUrl: issue.url };
   } catch (error) {
     console.error("Could not create response issue:", error);
@@ -67,17 +69,11 @@ export default function Respond() {
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
-  const [displayName, setDisplayName] = useState("");
   const [githubUsername, setGithubUsername] = useState("");
 
   useEffect(() => {
-    setDisplayName(window.localStorage.getItem("dba-player-name") ?? "");
     setGithubUsername(window.localStorage.getItem("dba-github-username") ?? "");
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("dba-player-name", displayName);
-  }, [displayName]);
 
   useEffect(() => {
     window.localStorage.setItem("dba-github-username", githubUsername);
@@ -123,10 +119,8 @@ export default function Respond() {
           textPlaceholder="I would..."
           submitLabel={isSubmitting ? "Submitting..." : "Submit response"}
           error={result?.ok === false ? result.error : null}
-          disabled={isSubmitting}
-          displayName={displayName}
+          isSubmitting={isSubmitting}
           githubUsername={githubUsername}
-          onDisplayNameChange={setDisplayName}
           onGithubUsernameChange={setGithubUsername}
         />
       )}
@@ -148,16 +142,71 @@ function SubmissionShell({ title, children }: { title: string; children: React.R
   );
 }
 
+type HandleCheck =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "valid"; name: string }
+  | { status: "invalid" };
+
+function useGitHubHandleCheck() {
+  const [check, setCheck] = useState<HandleCheck>({ status: "idle" });
+
+  const verify = useCallback(async (rawHandle: string) => {
+    const handle = rawHandle.trim().replace(/^@/, "");
+    if (!handle) {
+      setCheck({ status: "idle" });
+      return;
+    }
+    setCheck({ status: "checking" });
+    try {
+      const response = await fetch(`/api/github-user?username=${encodeURIComponent(handle)}`);
+      const data = (await response.json()) as { exists: boolean; login?: string; name?: string };
+      setCheck(
+        data.exists
+          ? { status: "valid", name: data.name ?? data.login ?? handle }
+          : { status: "invalid" },
+      );
+    } catch {
+      setCheck({ status: "idle" });
+    }
+  }, []);
+
+  const reset = useCallback(() => setCheck({ status: "idle" }), []);
+
+  return { check, verify, reset };
+}
+
+function HandleBanner({ check }: { check: HandleCheck }) {
+  if (check.status === "checking") {
+    return (
+      <p className="rounded-xl bg-white/10 px-3 py-2 text-sm text-white/70">Checking GitHub username…</p>
+    );
+  }
+  if (check.status === "valid") {
+    return (
+      <p className="rounded-xl bg-emerald-500/20 px-3 py-2 text-sm text-emerald-100">
+        Playing as <span className="font-medium">{check.name}</span>.
+      </p>
+    );
+  }
+  if (check.status === "invalid") {
+    return (
+      <p className="rounded-xl bg-red-500/30 px-3 py-2 text-sm">
+        No GitHub user found. Check the spelling and try again.
+      </p>
+    );
+  }
+  return null;
+}
+
 function SubmissionForm({
   textName,
   textLabel,
   textPlaceholder,
   submitLabel,
   error,
-  disabled,
-  displayName,
+  isSubmitting,
   githubUsername,
-  onDisplayNameChange,
   onGithubUsernameChange,
 }: {
   textName: string;
@@ -165,36 +214,34 @@ function SubmissionForm({
   textPlaceholder: string;
   submitLabel: string;
   error: string | null;
-  disabled: boolean;
-  displayName: string;
+  isSubmitting: boolean;
   githubUsername: string;
-  onDisplayNameChange: (value: string) => void;
   onGithubUsernameChange: (value: string) => void;
 }) {
+  const { check, verify, reset } = useGitHubHandleCheck();
+  const normalizedHandle = githubUsername.trim().replace(/^@/, "");
+  const submitDisabled =
+    isSubmitting || normalizedHandle.length === 0 || check.status === "invalid";
+
   return (
     <Form method="post" className="space-y-4">
       <label className="block">
-        <span className="text-sm font-medium">Name</span>
-        <input
-          className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
-          maxLength={40}
-          name="displayName"
-          value={displayName}
-          onChange={(event) => onDisplayNameChange(event.target.value)}
-          required
-        />
-      </label>
-      <label className="block">
-        <span className="text-sm font-medium">GitHub username <span className="text-white/60">(optional)</span></span>
+        <span className="text-sm font-medium">GitHub username</span>
         <input
           className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
           maxLength={39}
           name="githubUsername"
           placeholder="@octocat"
           value={githubUsername}
-          onChange={(event) => onGithubUsernameChange(event.target.value)}
+          onChange={(event) => {
+            onGithubUsernameChange(event.target.value);
+            reset();
+          }}
+          onBlur={(event) => verify(event.target.value)}
+          required
         />
       </label>
+      <HandleBanner check={check} />
       <label className="hidden">
         Website
         <input name="website" tabIndex={-1} autoComplete="off" />
@@ -213,7 +260,7 @@ function SubmissionForm({
       {error ? <p className="rounded-xl bg-red-500/30 px-3 py-2 text-sm">{error}</p> : null}
       <button
         className="font-display w-full rounded-full bg-dba-yellow px-6 py-3 text-xl text-dba-ink disabled:opacity-60"
-        disabled={disabled}
+        disabled={submitDisabled}
         type="submit"
       >
         {submitLabel}
