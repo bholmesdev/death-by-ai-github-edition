@@ -38,6 +38,7 @@ const token = process.env.GITHUB_TOKEN;
 const cache = new Map<string, CacheEntry<unknown>>();
 const scenarioLabel = "game:scenario";
 const responseLabel = "game:response";
+const placeholderAvatarUrl = "/placeholder-avatar.svg";
 
 export async function getApprovedScenarios(): Promise<Scenario[]> {
   return withGitHubFallback("approved scenarios", [], () =>
@@ -82,18 +83,16 @@ export async function getSubmittedResponses(scenarioNumber: number): Promise<Sub
           : verdict === "died" ? "died"
           : issue.comments > 0 ? "in-progress"
           : "submitted";
+        const githubUsername =
+          parseMetadata(issue.body, "github-username") ??
+          parseSection(issue.body, "GitHub username") ??
+          "";
+
         return {
           issueNumber: issue.number,
           playerName: parsePlayerName(issue.body) ?? issue.user?.login ?? "Anonymous",
-          githubUsername:
-            parseMetadata(issue.body, "github-username") ??
-            parseSection(issue.body, "GitHub username") ??
-            "",
-          avatarUrl:
-            parseMetadata(issue.body, "github-avatar-url") ??
-            parseSection(issue.body, "GitHub avatar URL") ??
-            issue.user?.avatar_url ??
-            "",
+          githubUsername,
+          avatarUrl: githubUsername ? getPlayerAvatarUrl(issue.body) : placeholderAvatarUrl,
           issueUrl: issue.html_url,
           status,
         };
@@ -239,15 +238,19 @@ async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | 
     issueNumber: issue.number,
     scenarioNumber,
     playerName: parsePlayerName(issue.body) ?? issue.user?.login ?? "Anonymous",
-    avatarUrl:
-      parseMetadata(issue.body, "github-avatar-url") ??
-      parseSection(issue.body, "GitHub avatar URL") ??
-      issue.user?.avatar_url ??
-      "",
+    avatarUrl: getPlayerAvatarUrl(issue.body),
     body: cleanVerdictBody(comment?.body ?? issue.body ?? ""),
     verdict,
     arrivedAt: Date.parse(comment?.created_at ?? issue.created_at),
   };
+}
+
+function getPlayerAvatarUrl(body: string | null) {
+  return (
+    parseMetadata(body, "github-avatar-url") ??
+    parseSection(body, "GitHub avatar URL") ??
+    placeholderAvatarUrl
+  );
 }
 
 

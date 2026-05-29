@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Player avatar placeholder">
+  <rect width="128" height="128" rx="64" fill="#1B1030"/>
+  <circle cx="64" cy="49" r="24" fill="#FFDC32"/>
+  <path d="M25 116c5-24 21-38 39-38s34 14 39 38" fill="#B49CFF"/>
+  <path d="M21 29 64 8l43 21v32c0 30-18 48-43 59-25-11-43-29-43-59V29Z" fill="none" stroke="#FFFFFF" stroke-opacity=".32" stroke-width="8"/>
+</svg>

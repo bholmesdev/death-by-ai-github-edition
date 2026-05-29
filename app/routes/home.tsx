@@ -882,7 +882,7 @@ function SubmittedResponsesFeed({ responses }: { responses: SubmittedResponse[] 
               <img
                 alt=""
                 className="size-16 rounded-full border-2 border-white/40 group-hover:border-dba-yellow"
-                src={r.avatarUrl || `https://github.com/identicons/${r.playerName}.png`}
+                src={r.avatarUrl}
               />
               <span className="font-display text-lg">{r.playerName}</span>
               <span className="text-xs uppercase tracking-wider text-white/50">
