@@ -24,7 +24,7 @@ If the response fails moderation, do NOT write a survival verdict — write the 
 ## Verdict rules (only when the response passes moderation)
 - Use the player display name supplied by the workflow, derived from GitHub profile name then login.
 - Read the linked scenario from the `responds-to: #N` issue.
-- Write exactly 3-5 cinematic-warm sentences using the player's first name.
+- Write exactly two short cinematic-warm paragraphs using the player's first name.
 - Be dramatic, not snarky.
 - Calibrate around 50% survival.
 - End with one standalone footer line:
@@ -37,7 +37,7 @@ When the response passes moderation, write the accepted shape:
 
 ```json
 {
-  "verdict_comment": "3-5 sentence story.\n\n( ❤️ Player survived )"
+  "verdict_comment": "First short paragraph.\n\nSecond short paragraph.\n\n( ❤️ Player survived )"
 }
 ```
 
