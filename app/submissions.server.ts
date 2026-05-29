@@ -26,9 +26,11 @@ export function cleanInput(value: FormDataEntryValue | null) {
     .trim();
 }
 
-export function validateDisplayName(displayName: string) {
-  if (displayName.length < 1) return "Enter a name.";
-  if (displayName.length > 40) return "Name must be 40 characters or fewer.";
+export function validateGitHubUsername(githubUsername: string) {
+  if (githubUsername.length < 1) return "Enter a GitHub username.";
+  if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(githubUsername)) {
+    return "Enter a valid GitHub username.";
+  }
   return null;
 }
 

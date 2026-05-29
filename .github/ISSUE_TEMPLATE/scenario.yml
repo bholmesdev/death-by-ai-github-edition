@@ -11,3 +11,11 @@ body:
       placeholder: "You're trapped in an elevator with..."
     validations:
       required: true
+  - type: input
+    id: github-username
+    attributes:
+      label: GitHub username
+      description: Your GitHub handle. Used to credit your suggestion.
+      placeholder: "octocat"
+    validations:
+      required: true
