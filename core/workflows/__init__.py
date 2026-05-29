@@ -91,12 +91,39 @@ def extract_player_name_from_body(body: str, user: Any | None = None) -> str:
 
 
 def verdict_label_from_text(text: str) -> str:
-    footer = (text or "").strip().splitlines()[-1] if (text or "").strip() else ""
+    verdict_text = _extract_verdict_text(text)
+    footer = verdict_text.splitlines()[-1] if verdict_text else ""
     if re.search(r"\bsurvived\b", footer, re.IGNORECASE):
         return SURVIVED_LABEL
     if re.search(r"\bdied\b", footer, re.IGNORECASE):
         return DIED_LABEL
     raise ValueError("verdict footer must include survived or died")
+
+
+def _extract_verdict_text(text: str) -> str:
+    body = (text or "").strip()
+    match = re.search(
+        r"<details>\s*<summary>.*?</summary>\s*(.*?)\s*</details>\s*$",
+        body,
+        re.IGNORECASE | re.DOTALL,
+    )
+    return (match.group(1) if match else body).strip()
+
+
+def format_verdict_comment(comment: str) -> str:
+    verdict = _extract_verdict_text(comment)
+    if re.search(r"<details\b", comment or "", re.IGNORECASE):
+        return (comment or "").strip()
+    return "\n".join(
+        [
+            "<details>",
+            "<summary>Judgment</summary>",
+            "",
+            verdict,
+            "",
+            "</details>",
+        ]
+    )
 
 
 def _comment(result: Mapping[str, Any], *keys: str) -> str:
@@ -271,7 +298,7 @@ class JudgeWorkflow(BaseGameWorkflow):
         comment = _comment(result, "verdict_comment", "comment", "body")
         if not comment:
             raise ValueError("verdict_result.json missing verdict_comment")
-        issue.create_comment(comment)
+        issue.create_comment(format_verdict_comment(comment))
         issue.add_to_labels(verdict_label_from_text(comment))
         progress.complete("Verdict posted.")
 
@@ -290,5 +317,6 @@ __all__ = [
     "extract_player_name",
     "extract_player_name_from_body",
     "extract_response_target",
+    "format_verdict_comment",
     "verdict_label_from_text",
 ]

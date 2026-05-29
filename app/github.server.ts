@@ -422,7 +422,10 @@ function cleanScenarioPrompt(body: string | null, fallback: string) {
 }
 
 function cleanVerdictBody(body: string) {
-  return body
+  const detailsMatch = body.match(/<details>\s*<summary>.*?<\/summary>\s*([\s\S]*?)\s*<\/details>\s*$/i);
+  const verdictBody = detailsMatch?.[1] ?? body;
+
+  return verdictBody
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/^#+\s+.*$/gm, "")
     .trim();

@@ -298,7 +298,7 @@ def build_comment_body(content: str, metadata: str) -> str:
     return content
 
 _PROGRESS_LINK_PREFIXES = (
-    "You can follow along in [the session on Warp]",
+    "You can follow along in [what the agent is doing your browser]",
     "You can view [the conversation on Warp]",
 )
 
@@ -475,7 +475,7 @@ def _format_progress_link_section(session_link: str) -> str:
     normalized_link = session_link.strip()
     if "/conversation/" in normalized_link:
         return f"You can view [the conversation on Warp]({normalized_link})."
-    return f"You can follow along in [the session on Warp]({normalized_link})."
+    return f"You can follow along in [what the agent is doing in your browser]({normalized_link})."
 
 
 def _format_triage_session_link(session_link: str) -> str:
