@@ -28,6 +28,8 @@ export type ResponseVerdict = {
   playerName: string;
   avatarUrl: string;
   body: string;
+  responseText: string;
+  issueUrl: string;
   verdict: Verdict;
   arrivedAt: number;
 };
@@ -57,7 +59,6 @@ export type GameSnapshot = {
   submissionDurationSeconds: number;
   readyResponses: ResponseVerdict[];
   revealedResponses: ResponseVerdict[];
-  stragglers: ResponseVerdict[];
   reveal: RevealState;
   scores: PlayerScore[];
   joinUrl: string | null;
@@ -76,8 +77,6 @@ type UrlGameState = {
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
   reveal: RevealState;
-  previousRoundNumber: number | null;
-  previousRevealedResponseIds: string[];
   scores: PlayerScore[];
   scoredResponseIds: string[];
 };
@@ -92,8 +91,6 @@ type GameState = {
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
   reveal: RevealState;
-  previousRoundNumber: number | null;
-  previousRevealedResponseIds: string[];
   scoredResponseIds: Set<string>;
   scoresByPlayer: Map<string, PlayerScore>;
   responsesById: Map<string, ResponseVerdict>;
@@ -113,8 +110,6 @@ const state: GameState = {
     visibleSegments: 0,
     revealedResponseIds: [],
   },
-  previousRoundNumber: null,
-  previousRevealedResponseIds: [],
   scoredResponseIds: new Set(),
   scoresByPlayer: new Map(),
   responsesById: new Map(),
@@ -132,12 +127,7 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     state.reveal.revealedResponseIds.includes(response.id),
   );
 
-  const stragglers = state.previousRoundNumber
-    ? (await getReadyResponses(state.previousRoundNumber)).filter(
-        (response) => !state.previousRevealedResponseIds.includes(response.id),
-      )
-    : [];
-  for (const response of [...currentResponses, ...stragglers]) {
+  for (const response of currentResponses) {
     state.responsesById.set(response.id, response);
   }
 
@@ -156,7 +146,6 @@ export async function getGameSnapshot(origin?: string): Promise<GameSnapshot> {
     submissionDurationSeconds: state.submissionDurationSeconds,
     readyResponses,
     revealedResponses,
-    stragglers,
     reveal: state.reveal,
     scores: [...state.scoresByPlayer.values()].sort((a, b) => b.total - a.total),
     joinUrl: state.currentScenario ? buildJoinUrl(state.currentScenario, origin) : null,
@@ -181,8 +170,6 @@ export function hydrateGameState(encoded: string | null) {
     state.submissionEndsAt = parsed.submissionEndsAt;
     state.submissionDurationSeconds = parsed.submissionDurationSeconds;
     state.reveal = parsed.reveal;
-    state.previousRoundNumber = parsed.previousRoundNumber;
-    state.previousRevealedResponseIds = parsed.previousRevealedResponseIds;
     state.scoresByPlayer = new Map(parsed.scores.map((score) => [score.playerName, score]));
     state.scoredResponseIds = new Set(parsed.scoredResponseIds);
     state.responsesById = new Map();
@@ -201,8 +188,6 @@ export function encodeGameState() {
     submissionEndsAt: state.submissionEndsAt,
     submissionDurationSeconds: state.submissionDurationSeconds,
     reveal: state.reveal,
-    previousRoundNumber: state.previousRoundNumber,
-    previousRevealedResponseIds: state.previousRevealedResponseIds,
     scores: [...state.scoresByPlayer.values()],
     scoredResponseIds: [...state.scoredResponseIds],
   };
@@ -249,8 +234,6 @@ function shuffle<T>(items: T[]) {
 export async function startGame() {
   state.phase = "confirming";
   state.roundNumber = 1;
-  state.previousRoundNumber = null;
-  state.previousRevealedResponseIds = [];
   state.scoredResponseIds.clear();
   state.scoresByPlayer.clear();
   state.usedScenarioNumbers.clear();
@@ -277,6 +260,19 @@ export function startReveal() {
   state.phase = "revealing";
   state.submissionEndsAt = null;
   state.usedScenarioNumbers.add(state.currentScenario.number);
+}
+
+// Re-fetch approved scenarios from GitHub and pick a fresh prompt server-side so
+// newly-approved scenarios appear mid-game, instead of cycling a stale cached deck.
+export async function shuffleScenario() {
+  if (state.phase !== "confirming") return;
+
+  const scenarios = await getApprovedScenarios();
+  state.scenarioDeck = buildScenarioDeck(scenarios);
+  state.scenarioDeckIndex = 0;
+
+  const next = nextScenarioFromDeck(state.usedScenarioNumbers, state.currentScenario?.number);
+  if (next) state.currentScenario = next;
 }
 
 export function selectResponse(id: string) {
@@ -308,8 +304,6 @@ export async function revealResponse(id: string) {
 
 export async function nextRound() {
   await scoreCurrentRound();
-  state.previousRoundNumber = state.currentScenario?.number ?? null;
-  state.previousRevealedResponseIds = [...state.reveal.revealedResponseIds];
   state.roundNumber += 1;
   state.phase = "confirming";
   state.currentScenario = await pickScenario(state.usedScenarioNumbers);
