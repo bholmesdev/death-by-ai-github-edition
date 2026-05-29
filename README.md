@@ -41,9 +41,9 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
    │     sentence-by-sentence with MC presses, ending in the          │
    │     survived/died footer.                                        │
    │                                                                  │
-   │  5. Late verdicts pop in during reveal. Verdicts that land       │
-   │     after MC advances become "stragglers" in the next round's    │
-   │     reveal. Anything older orphans (lives in GitHub forever).    │
+   │  5. New verdicts keep popping in during the round's reveal.      │
+   │     When the MC moves to the next round, responses still being   │
+   │     judged stay in GitHub but no longer appear on screen.        │
    │                                                                  │
    │  6. MC clicks "next round". Loop.                                │
    └──────────────────────────────────────────────────────────────────┘

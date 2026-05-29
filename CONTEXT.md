@@ -34,9 +34,7 @@ Everything lives in this repo, deployed as one Vercel project:
 
 **MC** — The master of ceremonies running the live event. Drives the projector directly (no separate admin UI): starts the game, opens rounds, picks which response to reveal next, ends rounds, ends the game. Holds a microphone and interacts with the crowd between reveals.
 
-**Reveal** — The phase after the submission timer ends. The projector shows tiles for each response whose verdict is ready (author + avatar visible, story hidden). The MC clicks a tile; the story unfolds paragraph by paragraph on screen, ending in the survived/died reveal. New tiles can pop in during reveal as more verdicts land. The MC can skip remaining tiles and advance to the next round at any time.
-
-**Straggler** — A response whose verdict landed after the MC advanced past its round. Stragglers are surfaced in a dedicated strip at the start of the next round's reveal phase as "from round #N". Anything older than one round is orphaned (still in GitHub, never reaches the screen).
+**Reveal** — The phase after the submission timer ends. The projector shows tiles for each response whose verdict is ready (author + avatar visible, story hidden). The MC clicks a tile; the story unfolds paragraph by paragraph on screen, ending in the survived/died reveal. New tiles can pop in during reveal as more verdicts land. The MC can skip remaining tiles and advance to the next round at any time. Responses whose verdicts land after the MC advances stay in GitHub but no longer appear on screen.
 
 **Verdict** — The judge's narrative judgment of a response. Posted as a single comment on the response issue: 3-5 cinematic sentences using the player's first name (e.g. "Jeff activates their super suit just in time…"), followed by a standalone footer line `( {emoji} {name} survived )` or `( {emoji} {name} died )`. The projector splits the comment on sentence boundaries for press-to-advance reveal; the footer is the final press. Tone is cinematic-warm, not snarky. Calibrated around ~50% survival rate.
 
