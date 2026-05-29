@@ -1,4 +1,4 @@
-import { Form, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { Form, useFetcher, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import MingcuteCloseLine from "~icons/mingcute/close-line";
 import MingcutePlayLine from "~icons/mingcute/play-line";
@@ -68,36 +68,54 @@ export async function action({ request }: Route.ActionArgs) {
 export default function Home() {
   const game = useLoaderData<typeof loader>();
   const navigation = useNavigation();
+  const poller = useFetcher<typeof action>();
   const submit = useSubmit();
+  const [acceptedPollGame, setAcceptedPollGame] = useState<typeof game | null>(null);
+  const liveGame = acceptedPollGame ?? game;
+  const livePhase = liveGame.phase;
   const pendingIntent =
     navigation.state !== "idle" ? String(navigation.formData?.get("intent") ?? "") : null;
   const pendingResponseId =
     pendingIntent === "select-response" ? String(navigation.formData?.get("responseId") ?? "") : null;
-  const selectedResponse = [...game.stragglers, ...game.readyResponses, ...game.revealedResponses].find(
-    (response) => response.id === game.reveal.selectedResponseId,
+  const selectedResponse = [...liveGame.stragglers, ...liveGame.readyResponses, ...liveGame.revealedResponses].find(
+    (response) => response.id === liveGame.reveal.selectedResponseId,
   );
   const selectedSegments = selectedResponse ? splitReveal(selectedResponse.body) : null;
-  const isLightPhase = game.phase === "revealing" && Boolean(selectedResponse);
+  const isLightPhase = liveGame.phase === "revealing" && Boolean(selectedResponse);
 
   useEffect(() => {
-    if (game.phase !== "submitting" && game.phase !== "revealing") return;
+    setAcceptedPollGame(null);
+  }, [game.phase, game.currentScenario?.number, game.roundNumber]);
+
+  useEffect(() => {
+    if (!poller.data) return;
+    const sameScenario = poller.data.currentScenario?.number === liveGame.currentScenario?.number;
+    const samePhase = poller.data.phase === liveGame.phase;
+    const timerExpired = liveGame.phase === "submitting" && poller.data.phase === "revealing";
+    if (sameScenario && (samePhase || timerExpired)) {
+      setAcceptedPollGame(poller.data);
+    }
+  }, [poller.data, liveGame]);
+
+  useEffect(() => {
+    if (livePhase !== "submitting" && livePhase !== "revealing") return;
     const interval = window.setInterval(() => {
-      submit({ intent: "noop" }, { method: "post" });
-    }, game.phase === "submitting" ? 1000 : 3000);
+      poller.submit({ intent: "noop" }, { method: "post" });
+    }, livePhase === "submitting" ? 1000 : 3000);
     return () => window.clearInterval(interval);
-  }, [game.phase, submit]);
+  }, [livePhase, poller]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement) return;
-      if (event.key.toLowerCase() === "n" && game.phase === "revealing") {
+      if (event.key.toLowerCase() === "n" && livePhase === "revealing") {
         submit({ intent: "next-round" }, { method: "post" });
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [game.phase, submit]);
+  }, [livePhase, submit]);
 
   return (
     <main className="relative min-h-screen overflow-hidden text-white">
@@ -118,47 +136,47 @@ export default function Home() {
       )}
 
       <div className={`relative z-10 flex min-h-screen flex-col ${isLightPhase ? "text-black" : "text-white"}`}>
-        {game.phase === "idle" ? <IdleView pendingIntent={pendingIntent} /> : null}
-        {game.phase === "ended" ? <EndedView pendingIntent={pendingIntent} scores={game.scores} /> : null}
+        {liveGame.phase === "idle" ? <IdleView pendingIntent={pendingIntent} /> : null}
+        {liveGame.phase === "ended" ? <EndedView pendingIntent={pendingIntent} scores={liveGame.scores} /> : null}
 
-        {game.phase === "confirming" ? (
+        {liveGame.phase === "confirming" ? (
           <ConfirmView
-            scenario={game.currentScenario}
-            scenarioDeck={game.scenarioDeck}
-            durationSeconds={game.submissionDurationSeconds}
+            scenario={liveGame.currentScenario}
+            scenarioDeck={liveGame.scenarioDeck}
+            durationSeconds={liveGame.submissionDurationSeconds}
             pendingIntent={pendingIntent}
-            suggestPromptUrl={game.suggestPromptUrl}
-            roundNumber={game.roundNumber}
-            scores={game.scores}
+            suggestPromptUrl={liveGame.suggestPromptUrl}
+            roundNumber={liveGame.roundNumber}
+            scores={liveGame.scores}
           />
         ) : null}
 
-        {game.phase === "submitting" && game.currentScenario ? (
+        {liveGame.phase === "submitting" && liveGame.currentScenario ? (
           <SubmittingView
-            prompt={game.currentScenario.prompt}
-            submissionEndsAt={game.submissionEndsAt}
-            joinUrl={game.joinUrl}
-            repoUrl={game.repoUrl}
-            scenarioNumber={game.currentScenario.number}
+            prompt={liveGame.currentScenario.prompt}
+            submissionEndsAt={liveGame.submissionEndsAt}
+            joinUrl={liveGame.joinUrl}
+            repoUrl={liveGame.repoUrl}
+            scenarioNumber={liveGame.currentScenario.number}
             pendingIntent={pendingIntent}
-            roundNumber={game.roundNumber}
-            submittedResponses={game.submittedResponses}
+            roundNumber={liveGame.roundNumber}
+            submittedResponses={liveGame.submittedResponses}
           />
         ) : null}
 
-        {game.phase === "revealing" && game.currentScenario ? (
+        {liveGame.phase === "revealing" && liveGame.currentScenario ? (
           <RevealView
-            prompt={game.currentScenario.prompt}
-            stragglers={game.stragglers}
-            readyResponses={game.readyResponses}
-            revealedResponses={game.revealedResponses}
+            prompt={liveGame.currentScenario.prompt}
+            stragglers={liveGame.stragglers}
+            readyResponses={liveGame.readyResponses}
+            revealedResponses={liveGame.revealedResponses}
             pendingResponseId={pendingResponseId}
             selectedResponse={selectedResponse ?? null}
             selectedSegments={selectedSegments}
-            visibleSegments={game.reveal.visibleSegments}
+            visibleSegments={liveGame.reveal.visibleSegments}
             pendingIntent={pendingIntent}
-            roundNumber={game.roundNumber}
-            scores={game.scores}
+            roundNumber={liveGame.roundNumber}
+            scores={liveGame.scores}
           />
         ) : null}
       </div>
