@@ -551,11 +551,30 @@ function RevealView({
   const [localSelectedResponse, setLocalSelectedResponse] = useState<ResponseVerdict | null>(
     selectedResponse ?? null,
   );
+  const [localRevealedIds, setLocalRevealedIds] = useState(new Set<string>());
   const localSelectedSegments = localSelectedResponse ? splitReveal(localSelectedResponse.body) : null;
+  const revealedIds = new Set([
+    ...revealedResponses.map((response) => response.id),
+    ...localRevealedIds,
+  ]);
+  const visibleReadyResponses = readyResponses.filter((response) => !revealedIds.has(response.id));
+  const visibleRevealedResponses = [
+    ...revealedResponses,
+    ...readyResponses.filter((response) => localRevealedIds.has(response.id)),
+  ];
 
   useEffect(() => {
     setLocalSelectedResponse(null);
+    setLocalRevealedIds(new Set());
   }, [roundNumber]);
+
+  useEffect(() => {
+    setLocalRevealedIds((ids) => {
+      const next = new Set(ids);
+      for (const response of revealedResponses) next.delete(response.id);
+      return next.size === ids.size ? ids : next;
+    });
+  }, [revealedResponses]);
 
   if (localSelectedResponse && localSelectedSegments) {
     return (
@@ -567,6 +586,9 @@ function RevealView({
           footer={localSelectedSegments.footer}
           pendingIntent={pendingIntent}
           onBack={() => setLocalSelectedResponse(null)}
+          onReveal={() => {
+            setLocalRevealedIds((ids) => new Set([...ids, localSelectedResponse.id]));
+          }}
           onComplete={() => {
             setLocalSelectedResponse(null);
             revealSubmitter.submit(
@@ -602,14 +624,14 @@ function RevealView({
 
         <ResponseGrid
           title="Ready to reveal"
-          responses={readyResponses}
+          responses={visibleReadyResponses}
           pendingResponseId={pendingResponseId}
           emptyMessage="Waiting for the judge to weigh in..."
           onSelect={setLocalSelectedResponse}
         />
 
-        {revealedResponses.length ? (
-          <CompletedGrid responses={revealedResponses} />
+        {visibleRevealedResponses.length ? (
+          <CompletedGrid responses={visibleRevealedResponses} />
         ) : null}
       </div>
 
@@ -712,6 +734,7 @@ function RevealPlayer({
   footer,
   pendingIntent,
   onBack,
+  onReveal,
   onComplete,
 }: {
   response: ResponseVerdict;
@@ -720,16 +743,25 @@ function RevealPlayer({
   footer: string;
   pendingIntent: string | null;
   onBack: () => void;
+  onReveal: () => void;
   onComplete: () => void;
 }) {
   const [localSegments, setLocalSegments] = useState(visibleSegments || 1);
+  const didReveal = useRef(false);
   const shownSegments = segments.slice(0, Math.min(localSegments, segments.length));
   const showFooter = localSegments > segments.length;
   const survived = response.verdict === "survived";
 
   useEffect(() => {
     setLocalSegments(visibleSegments || 1);
+    didReveal.current = false;
   }, [response.id, visibleSegments]);
+
+  useEffect(() => {
+    if (!showFooter || didReveal.current) return;
+    didReveal.current = true;
+    onReveal();
+  }, [onReveal, showFooter]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -952,9 +984,17 @@ function ScoreStrip({ scores }: { scores: PlayerScore[] }) {
       {top.map((score) => (
         <span
           key={score.playerName}
-          className="rounded-full bg-white px-3 py-1 text-sm font-medium text-dba-ink"
+          className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm font-medium text-dba-ink"
         >
-          {score.playerName} <span className="ml-1 font-semibold">{score.total}</span>
+          <span>{score.playerName}</span>
+          <span className="inline-flex items-center gap-1 text-emerald-700">
+            <MingcuteCheckLine className="text-base" />
+            {score.survived}
+          </span>
+          <span className="inline-flex items-center gap-1 text-red-700">
+            <MingcuteSkullLine className="text-base" />
+            {score.died}
+          </span>
         </span>
       ))}
     </div>
