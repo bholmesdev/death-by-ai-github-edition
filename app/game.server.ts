@@ -310,7 +310,8 @@ export async function nextRound() {
   resetRoundState();
 }
 
-export function endGame() {
+export async function endGame() {
+  await scoreCurrentRound();
   state.phase = "ended";
   state.currentScenario = null;
   state.submissionEndsAt = null;
