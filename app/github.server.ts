@@ -197,12 +197,6 @@ export async function createResponseIssue(input: {
   return createIssue({
     title: `Response to ${scenarioTitle} from ${input.displayName}`,
     body: [
-      `responds-to: #${input.scenarioNumber}`,
-      `player-name: ${input.displayName}`,
-      ...(githubUser
-        ? [`github-username: ${githubUser.login}`, `github-avatar-url: ${githubUser.avatarUrl}`]
-        : []),
-      "",
       "### Scenario",
       "",
       `#${input.scenarioNumber}`,
