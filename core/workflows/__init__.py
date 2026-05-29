@@ -117,7 +117,7 @@ def format_verdict_comment(comment: str) -> str:
     return "\n".join(
         [
             "<details>",
-            "<summary>Judgment</summary>",
+            "<summary>Reveal your fate</summary>",
             "",
             verdict,
             "",

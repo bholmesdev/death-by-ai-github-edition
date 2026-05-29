@@ -95,12 +95,12 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertEqual(verdict_label_from_text("Ada wins.\n\n( ❤️ Ada survived )"), SURVIVED_LABEL)
         self.assertEqual(verdict_label_from_text("Ada slips.\n\n( 💀 Ada died )"), DIED_LABEL)
         self.assertEqual(
-            verdict_label_from_text("<details>\n<summary>Judgment</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>"),
+            verdict_label_from_text("<details>\n<summary>Reveal your fate</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>"),
             SURVIVED_LABEL,
         )
         self.assertEqual(
             format_verdict_comment("Ada wins.\n\n( ❤️ Ada survived )"),
-            "<details>\n<summary>Judgment</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>",
+            "<details>\n<summary>Reveal your fate</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>",
         )
 
     def test_judge_missing_scenario_skips_dispatch(self):
@@ -204,7 +204,7 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertIn(SURVIVED_LABEL, issue.added_labels)
         self.assertEqual(
             issue.comments,
-            ["<details>\n<summary>Judgment</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>"],
+            ["<details>\n<summary>Reveal your fate</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>"],
         )
         self.assertEqual(progress.completions, ["Verdict posted."])
 
