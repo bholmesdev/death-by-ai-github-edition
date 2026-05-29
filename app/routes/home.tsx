@@ -120,7 +120,7 @@ export default function Home() {
     if (livePhase !== "submitting" && livePhase !== "revealing") return;
     const interval = window.setInterval(() => {
       poller.submit({ intent: "noop", game: gameParam }, { method: "post" });
-    }, livePhase === "submitting" ? 1000 : 3000);
+    }, 3000);
     return () => window.clearInterval(interval);
   }, [gameParam, livePhase, poller]);
 
@@ -451,7 +451,7 @@ function SubmittingView({
   roundNumber: number;
   submittedResponses: SubmittedResponse[];
 }) {
-  const remaining = secondsLeft(submissionEndsAt);
+  const remaining = useSecondsLeft(submissionEndsAt);
   const hasResponses = submittedResponses.length > 0;
 
   return (
@@ -1007,6 +1007,21 @@ function useGameParam() {
   const contextValue = useContext(GameParamContext);
   const locationValue = new URLSearchParams(useLocation().search).get("game") ?? "";
   return contextValue || locationValue;
+}
+
+function useSecondsLeft(endsAt: number | null) {
+  const [remaining, setRemaining] = useState(() => secondsLeft(endsAt));
+
+  useEffect(() => {
+    setRemaining(secondsLeft(endsAt));
+    if (!endsAt) return;
+
+    const tick = () => setRemaining(secondsLeft(endsAt));
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [endsAt]);
+
+  return remaining;
 }
 
 function Spinner() {
