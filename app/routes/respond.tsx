@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 
 import { createResponseIssue, getScenario } from "../github.server";
@@ -43,13 +44,17 @@ export async function action({ request, params }: Route.ActionArgs): Promise<Sub
   if (rateLimitError) return { ok: false, error: rateLimitError };
 
   const displayName = cleanInput(formData.get("displayName"));
+  const githubUsername = cleanInput(formData.get("githubUsername")).replace(/^@/, "");
   const response = cleanInput(formData.get("response"));
   const validationError =
     validateDisplayName(displayName) || validateLongText(response, "Response");
   if (validationError) return { ok: false, error: validationError };
 
   try {
-    const issue = await createResponseIssue({ scenarioNumber, displayName, response });
+    if (!(await getScenario(scenarioNumber))) {
+      return { ok: false, error: "This scenario is not accepting responses." };
+    }
+    const issue = await createResponseIssue({ scenarioNumber, displayName, githubUsername, response });
     return { ok: true, issueNumber: issue.number, issueUrl: issue.url };
   } catch (error) {
     console.error("Could not create response issue:", error);
@@ -62,6 +67,21 @@ export default function Respond() {
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
+  const [displayName, setDisplayName] = useState("");
+  const [githubUsername, setGithubUsername] = useState("");
+
+  useEffect(() => {
+    setDisplayName(window.localStorage.getItem("dba-player-name") ?? "");
+    setGithubUsername(window.localStorage.getItem("dba-github-username") ?? "");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dba-player-name", displayName);
+  }, [displayName]);
+
+  useEffect(() => {
+    window.localStorage.setItem("dba-github-username", githubUsername);
+  }, [githubUsername]);
 
   return (
     <SubmissionShell title={`Respond to scenario #${scenarioNumber}`}>
@@ -71,12 +91,15 @@ export default function Respond() {
           <p className="mt-2 text-lg">{scenario.prompt}</p>
         </div>
       ) : (
-        <p className="mb-5 rounded-2xl bg-white/10 p-4 text-sm text-white/80">
-          Scenario prompt not loaded, but your response will still link to #{scenarioNumber}.
-        </p>
+        <div className="mb-5 rounded-2xl bg-white/10 p-4">
+          <p className="font-display text-xl text-dba-yellow">This scenario is not accepting responses.</p>
+          <a className="mt-3 inline-block text-sm underline" href="/suggest">
+            Suggest a new scenario
+          </a>
+        </div>
       )}
 
-      {result?.ok ? (
+      {!scenario ? null : result?.ok ? (
         <div className="space-y-4">
           <SuccessResult
             issueNumber={result.issueNumber}
@@ -101,6 +124,10 @@ export default function Respond() {
           submitLabel={isSubmitting ? "Submitting..." : "Submit response"}
           error={result?.ok === false ? result.error : null}
           disabled={isSubmitting}
+          displayName={displayName}
+          githubUsername={githubUsername}
+          onDisplayNameChange={setDisplayName}
+          onGithubUsernameChange={setGithubUsername}
         />
       )}
     </SubmissionShell>
@@ -128,6 +155,10 @@ function SubmissionForm({
   submitLabel,
   error,
   disabled,
+  displayName,
+  githubUsername,
+  onDisplayNameChange,
+  onGithubUsernameChange,
 }: {
   textName: string;
   textLabel: string;
@@ -135,6 +166,10 @@ function SubmissionForm({
   submitLabel: string;
   error: string | null;
   disabled: boolean;
+  displayName: string;
+  githubUsername: string;
+  onDisplayNameChange: (value: string) => void;
+  onGithubUsernameChange: (value: string) => void;
 }) {
   return (
     <Form method="post" className="space-y-4">
@@ -144,7 +179,20 @@ function SubmissionForm({
           className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
           maxLength={40}
           name="displayName"
+          value={displayName}
+          onChange={(event) => onDisplayNameChange(event.target.value)}
           required
+        />
+      </label>
+      <label className="block">
+        <span className="text-sm font-medium">GitHub username <span className="text-white/60">(optional)</span></span>
+        <input
+          className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
+          maxLength={39}
+          name="githubUsername"
+          placeholder="@octocat"
+          value={githubUsername}
+          onChange={(event) => onGithubUsernameChange(event.target.value)}
         />
       </label>
       <label className="hidden">

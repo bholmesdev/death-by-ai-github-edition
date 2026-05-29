@@ -64,6 +64,7 @@ export type SubmittedResponseStatus = "submitted" | "in-progress" | "survived" |
 export type SubmittedResponse = {
   issueNumber: number;
   playerName: string;
+  githubUsername?: string;
   avatarUrl: string;
   issueUrl: string;
   status: SubmittedResponseStatus;
@@ -83,8 +84,16 @@ export async function getSubmittedResponses(scenarioNumber: number): Promise<Sub
           : "submitted";
         return {
           issueNumber: issue.number,
-          playerName: issue.user?.login ?? "Anonymous",
-          avatarUrl: issue.user?.avatar_url ?? "",
+          playerName: parsePlayerName(issue.body) ?? issue.user?.login ?? "Anonymous",
+          githubUsername:
+            parseMetadata(issue.body, "github-username") ??
+            parseSection(issue.body, "GitHub username") ??
+            "",
+          avatarUrl:
+            parseMetadata(issue.body, "github-avatar-url") ??
+            parseSection(issue.body, "GitHub avatar URL") ??
+            issue.user?.avatar_url ??
+            "",
           issueUrl: issue.html_url,
           status,
         };
@@ -176,13 +185,24 @@ export async function getScenario(scenarioNumber: number): Promise<Scenario | nu
 export async function createResponseIssue(input: {
   scenarioNumber: number;
   displayName: string;
+  githubUsername?: string;
   response: string;
 }): Promise<CreatedIssue> {
   const scenario = await getScenario(input.scenarioNumber);
+  if (!scenario) {
+    throw new Error(`Scenario #${input.scenarioNumber} is not accepting responses.`);
+  }
   const scenarioTitle = scenario ? cleanScenarioTitle(scenario.title) : `#${input.scenarioNumber}`;
+  const githubUser = input.githubUsername ? await getGitHubUser(input.githubUsername) : null;
   return createIssue({
     title: `Response to ${scenarioTitle} from ${input.displayName}`,
     body: [
+      `responds-to: #${input.scenarioNumber}`,
+      `player-name: ${input.displayName}`,
+      ...(githubUser
+        ? [`github-username: ${githubUser.login}`, `github-avatar-url: ${githubUser.avatarUrl}`]
+        : []),
+      "",
       "### Scenario",
       "",
       `#${input.scenarioNumber}`,
@@ -191,6 +211,9 @@ export async function createResponseIssue(input: {
       "",
       input.displayName,
       "",
+      ...(githubUser
+        ? ["### GitHub username", "", githubUser.login, "", "### GitHub avatar URL", "", githubUser.avatarUrl, ""]
+        : []),
       "### Survival plan",
       "",
       input.response,
@@ -221,8 +244,12 @@ async function toResponseVerdict(issue: GitHubIssue): Promise<ResponseVerdict | 
     id: String(issue.number),
     issueNumber: issue.number,
     scenarioNumber,
-    playerName: issue.user?.login ?? "Anonymous",
-    avatarUrl: issue.user?.avatar_url ?? "",
+    playerName: parsePlayerName(issue.body) ?? issue.user?.login ?? "Anonymous",
+    avatarUrl:
+      parseMetadata(issue.body, "github-avatar-url") ??
+      parseSection(issue.body, "GitHub avatar URL") ??
+      issue.user?.avatar_url ??
+      "",
     body: cleanVerdictBody(comment?.body ?? issue.body ?? ""),
     verdict,
     arrivedAt: Date.parse(comment?.created_at ?? issue.created_at),
@@ -408,7 +435,7 @@ function parseScenarioNumber(body: string | null) {
   const match =
     body?.match(/responds-to:\s*#?(\d+)/i) ??
     body?.match(/###\s*Scenario\s*\n+\s*#?(\d+)/i);
-  return match ? Number(match[1]) : null;
+  return match ? Number(match[1] || match[2]) : null;
 }
 
 function getVerdict(issue: GitHubIssue): Verdict | null {
@@ -443,6 +470,34 @@ function base64Url(input: string | Buffer) {
 
 function normalizePrivateKey(privateKey: string) {
   return privateKey.includes("\\n") ? privateKey.replace(/\\n/g, "\n") : privateKey;
+}
+
+async function getGitHubUser(username: string) {
+  const normalized = username.trim().replace(/^@/, "");
+  if (!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(normalized)) return null;
+
+  try {
+    const user = await request<{ login: string; avatar_url: string }>(`/users/${normalized}`);
+    return { login: user.login, avatarUrl: user.avatar_url };
+  } catch {
+    return null;
+  }
+}
+
+function parsePlayerName(body: string | null) {
+  return parseMetadata(body, "player-name") ?? parseSection(body, "Player");
+}
+
+function parseMetadata(body: string | null, key: string) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = body?.match(new RegExp(`^${escaped}:\\s*(.+)$`, "im"));
+  return match?.[1]?.trim() || null;
+}
+
+function parseSection(body: string | null, heading: string) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = body?.match(new RegExp(`^###\\s*${escaped}\\s*\\n+([\\s\\S]*?)(?=\\n###\\s|$)`, "im"));
+  return match?.[1]?.trim() || null;
 }
 
 function truncateForTitle(value: string) {

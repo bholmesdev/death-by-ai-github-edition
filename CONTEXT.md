@@ -1,12 +1,12 @@
 # Context
 
-Death by AI: GitHub Edition — a live game played at a conference welcome reception. Attendees submit survival responses by filing GitHub issues; custom Oz cloud agents review the prompt and write a story deciding whether each response survives. A projector layer (this repo) visualizes the game live during the event. Doubles as a demo of agents operating on an open-source repository.
+Death by AI: GitHub Edition — a live game played at a conference welcome reception. Attendees submit survival responses through a response form that creates GitHub issues; custom Oz cloud agents review the prompt and write a story deciding whether each response survives. A projector layer (this repo) visualizes the game live during the event. Doubles as a demo of agents operating on an open-source repository.
 
 ## Components (single repo)
 
 Everything lives in this repo, deployed as one Vercel project:
 
-- **Game state** — Scenarios and responses are GitHub issues filed against this repo. The Oz GitHub App is installed on this repo and delivers webhooks to our control plane.
+- **Game state** — Scenarios and responses are GitHub issues filed against this repo. Responses may be created through the public response form. The Oz GitHub App is installed on this repo and delivers webhooks to our control plane.
 - **Agent control plane** — Python serverless functions under `api/` (`webhook.py`, `cron.py`) ported from `warpdotdev/oz-for-oss`. Two custom skills under `.agents/skills/`: `scenario-moderator` and `death-by-ai-judge`, with workflow classes under `core/workflows/`.
 - **Projector** — React Router app rendering the live game on a TV during the event. Polls this repo's own GitHub API for state. Optional in principle (the game is fully playable on github.com without it); required for the live conference experience.
 
@@ -14,11 +14,15 @@ Everything lives in this repo, deployed as one Vercel project:
 
 **Scenario** — A GitHub issue with the `game:scenario` label. The issue number is the canonical round id. Body contains the prompt (e.g. "You're surrounded by 1000 puppies"). Any participant can author one. On creation, the scenario moderator runs and applies `scenario:approved` or `scenario:rejected`.
 
+**Scenario Form** — The public entry point where a participant submits a scenario prompt. It creates the scenario issue behind the scenes.
+
 **Scenario moderator** — A custom Oz skill (in the forked oz-for-oss) that runs on `game:scenario` issue creation, decides whether the scenario is appropriate and engaging enough to use, and applies `scenario:approved` or `scenario:rejected`. Only `scenario:approved` issues enter the selection pool.
 
-**Response** — A GitHub issue with the `game:response` label whose body contains a `responds-to: #N` line pointing at a scenario issue. The link is required; the judge workflow rejects responses without a valid scenario link. Authored by a participant (their GitHub identity is durable). Created via a QR-code deep link to GitHub's new-issue page with the body and labels pre-filled.
+**Response** — A GitHub issue with the `game:response` label whose body contains a `responds-to: #N` line pointing at a scenario issue and player metadata before the survival plan. The link is required; the judge workflow rejects responses without a valid scenario link. Authored by a participant.
 
-**Response** — A GitHub issue with the `game:response` label whose body contains a `responds-to: #N` line pointing at a scenario issue. Authored by a participant (their GitHub identity is durable). Created via a QR-code deep link to GitHub's new-issue page with the body and labels pre-filled.
+**Response Form** — The public entry point where a participant submits a name and survival plan for a specific scenario. It creates the response issue behind the scenes.
+
+**Open Scenario** — An approved scenario currently accepting responses through the response form. Responses are not accepted for missing, rejected, or unapproved scenarios.
 
 **Round** — The lifecycle of a single scenario inside a game: open for submissions (60s–2min) → reveal → ended. The scenario issue is the round's identity; there is no separate round entity. When a round opens, the projector picks a scenario via the selection algorithm (see below). The MC can re-roll the picked scenario at any time before or during the round.
 
@@ -38,7 +42,7 @@ Everything lives in this repo, deployed as one Vercel project:
 
 The `verdict:survived` or `verdict:died` label is applied to the issue by the workflow (derived from the footer's survived/died word). The label is the projector's "ready to reveal" signal — atomic, no race with comment posting.
 
-**Player** — The participant who authored a response issue. Display name for the story is derived as `user.name || user.login` from the GitHub user (with a fallback if neither is friendly). Avatar comes from GitHub.
+**Player** — The participant name submitted with a response, optionally paired with a GitHub username for avatar/profile display. The GitHub issue author is not the player when the response form creates the issue.
 
 **Judge** — A custom Oz skill (added to a fork of `oz-for-oss`) that reads a response issue, fetches its linked scenario, and produces a verdict. Runs in the standard webhook → dispatch → cron-drain lifecycle, so the session link surfaces as a progress comment on the response issue.
 

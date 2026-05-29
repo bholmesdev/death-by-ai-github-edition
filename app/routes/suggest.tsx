@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Form, useActionData, useNavigation } from "react-router";
 
 import { createScenarioIssue } from "../github.server";
@@ -43,6 +44,15 @@ export default function Suggest() {
   const result = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state !== "idle";
+  const [displayName, setDisplayName] = useState("");
+
+  useEffect(() => {
+    setDisplayName(window.localStorage.getItem("dba-player-name") ?? "");
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dba-player-name", displayName);
+  }, [displayName]);
 
   return (
     <main className="min-h-screen bg-dba-purple-500 px-5 py-8 text-white">
@@ -74,6 +84,8 @@ export default function Suggest() {
                   className="mt-1 w-full rounded-xl border border-white/20 bg-white px-3 py-3 text-black"
                   maxLength={40}
                   name="displayName"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
                   required
                 />
               </label>

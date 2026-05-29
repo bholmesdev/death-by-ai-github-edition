@@ -14,6 +14,7 @@ from core.workflows import (
     JudgeWorkflow,
     ScenarioModeratorWorkflow,
     extract_player_name,
+    extract_player_name_from_body,
     extract_response_target,
     verdict_label_from_text,
 )
@@ -86,6 +87,10 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertEqual(extract_response_target("responds-to: #42"), 42)
         self.assertEqual(extract_response_target("### Scenario\n\n#42"), 42)
         self.assertEqual(extract_player_name({"name": "Ada", "login": "octo"}), "Ada")
+        self.assertEqual(
+            extract_player_name_from_body("### Player\n\nGrace\n\n### Survival plan\n\nRun", {"login": "octo"}),
+            "Grace",
+        )
         self.assertEqual(verdict_label_from_text("Ada wins.\n\n( ❤️ Ada survived )"), SURVIVED_LABEL)
         self.assertEqual(verdict_label_from_text("Ada slips.\n\n( 💀 Ada died )"), DIED_LABEL)
 
@@ -150,7 +155,7 @@ class GameWorkflowTests(unittest.TestCase):
         self.assertEqual(retriever.calls, 0)
 
     def test_judge_valid_response_builds_dispatch(self):
-        response = FakeIssue(number=7, body="responds-to: #3")
+        response = FakeIssue(number=7, body="### Scenario\n\n#3\n\n### Player\n\nGrace")
         response.user = SimpleNamespace(name="Ada", login="octo")
         scenario = FakeIssue(number=3, body="Escape the moon.", labels=["game:scenario"])
         dispatch = JudgeWorkflow().build_dispatch(
@@ -159,7 +164,7 @@ class GameWorkflowTests(unittest.TestCase):
         )
         self.assertIsNotNone(dispatch)
         self.assertEqual(dispatch.payload_subset["scenario_number"], 3)
-        self.assertEqual(dispatch.payload_subset["player_name"], "Ada")
+        self.assertEqual(dispatch.payload_subset["player_name"], "Grace")
 
     def test_appliers_label_and_comment(self):
         issue = FakeIssue(number=9)

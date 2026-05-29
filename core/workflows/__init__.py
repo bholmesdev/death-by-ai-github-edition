@@ -24,6 +24,10 @@ RESPONDS_TO_RE = re.compile(
     r"responds-to:\s*#?(\d+)|###\s*Scenario\s*\n+\s*#?(\d+)",
     re.IGNORECASE,
 )
+PLAYER_NAME_RE = re.compile(
+    r"^player-name:\s*(.+)$|^###\s*Player\s*\n+([\s\S]*?)(?=\n###\s|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 def _owner_repo(payload: Mapping[str, Any]) -> tuple[str, str, str]:
     full_name = str(((payload.get("repository") or {}).get("full_name")) or "")
@@ -75,6 +79,15 @@ def extract_player_name(user: Any | None = None) -> str:
         name = getattr(user, "name", None)
         login = getattr(user, "login", None)
     return str(name or login or "Player").strip()
+
+
+def extract_player_name_from_body(body: str, user: Any | None = None) -> str:
+    match = PLAYER_NAME_RE.search(body or "")
+    if match:
+        name = (match.group(1) or match.group(2) or "").strip()
+        if name:
+            return name
+    return extract_player_name(user)
 
 
 def verdict_label_from_text(text: str) -> str:
@@ -226,7 +239,7 @@ class JudgeWorkflow(BaseGameWorkflow):
             return None
 
         user = getattr(response_issue, "user", None) or issue.get("user") or {}
-        player_name = extract_player_name(user)
+        player_name = extract_player_name_from_body(body, user)
         prompt = (
             f"Judge response issue #{issue_number} in {owner}/{repo}.\n\n"
             f"Player: {player_name}\n"
@@ -275,6 +288,7 @@ __all__ = [
     "ScenarioModeratorWorkflow",
     "build_workflow_registry",
     "extract_player_name",
+    "extract_player_name_from_body",
     "extract_response_target",
     "verdict_label_from_text",
 ]

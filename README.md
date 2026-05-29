@@ -60,7 +60,7 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
 | Thing | What it is in GitHub |
 |---|---|
 | Scenario | Issue with label `game:scenario`. Body = the prompt. Issue number = round id. |
-| Response | Issue with label `game:response`. Body contains `responds-to: #N`. Author = the player. |
+| Response | Issue with label `game:response`. Body contains `responds-to: #N`, player metadata, and the survival plan. |
 | Verdict | Single comment on the response issue + `verdict:survived` or `verdict:died` label. |
 | Moderation outcome | `scenario:approved` or `scenario:rejected` label, plus a friendly bot comment. |
 | Agent run | A "progress comment" on the issue containing the Oz cloud-run session link. |
