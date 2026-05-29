@@ -10,6 +10,7 @@ from core.workflows import (
     APPROVED_LABEL,
     DIED_LABEL,
     NO_SCENARIO_LABEL,
+    REJECTED_VERDICT_LABEL,
     SURVIVED_LABEL,
     JudgeWorkflow,
     ScenarioModeratorWorkflow,
@@ -207,6 +208,23 @@ class GameWorkflowTests(unittest.TestCase):
             ["<details>\n<summary>Reveal your fate</summary>\n\nAda wins.\n\n( ❤️ Ada survived )\n\n</details>"],
         )
         self.assertEqual(progress.completions, ["Verdict posted."])
+
+    def test_judge_applier_rejects_moderated_response(self):
+        issue = FakeIssue(number=9)
+        repo = FakeRepo({9: issue})
+        progress = FakeProgress()
+        JudgeWorkflow().apply_result(
+            repo,
+            context={"issue_number": 9},
+            run=None,
+            result={"verdict": "REJECTED", "comment": "That response broke the rules. Try a real survival plan."},
+            progress=progress,
+        )
+        self.assertIn(REJECTED_VERDICT_LABEL, issue.added_labels)
+        self.assertNotIn(SURVIVED_LABEL, issue.added_labels)
+        self.assertNotIn(DIED_LABEL, issue.added_labels)
+        self.assertEqual(issue.comments, ["That response broke the rules. Try a real survival plan."])
+        self.assertEqual(progress.completions, ["Response rejected by moderation."])
 
 
 if __name__ == "__main__":
