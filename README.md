@@ -12,7 +12,7 @@ A **scenario** is a survival prompt — *"You're surrounded by 1000 puppies"*. A
 
 1. The MC clicks "Start game" / "Next round" on the projector. The projector proposes an approved scenario (fewest existing responses first, random tiebreak, skipping used ones). The MC can shuffle to a different scenario from the deck, set the timer duration, then click "Start round".
 2. The scenario and a countdown timer show on screen. A QR code links to the app's response form (`/respond/:N`). Attendees fill in their name and survival plan; the app creates the GitHub issue on their behalf.
-3. Each response issue triggers the judge agent. It reads the linked scenario and the response, writes a two-paragraph cinematic verdict ending in a footer line like `( ❤️ Jeff survived )` or `( 💀 Jeff died )`, and applies the `verdict:survived` / `verdict:died` label — the projector's "ready to reveal" signal.
+3. Each response issue triggers the judge agent. It reads the linked scenario and the response, writes a cinematic verdict ending in a footer line like `( ❤️ Jeff survived )` or `( 💀 Jeff died )`, and applies the `verdict:survived` / `verdict:died` label — the projector's "ready to reveal" signal.
 4. Timer ends → reveal phase. The projector shows a tile for each response whose verdict is ready (avatar + name visible, story hidden). The MC clicks a tile; the story unfolds sentence-by-sentence with MC presses, ending in the survived/died footer.
 5. New verdicts keep popping in during the reveal. When the MC moves to the next round, responses still being judged stay in GitHub but no longer appear on screen.
 6. The MC clicks "Next round". Loop.
