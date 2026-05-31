@@ -29,8 +29,8 @@ type CacheEntry<T> = {
   value: T;
 };
 
-const defaultRepository = "warpdotdev-demos/death-by-ai-github-edition";
-const repository = process.env.GITHUB_REPOSITORY || process.env.WORKFLOW_CODE_REPOSITORY || defaultRepository;
+const defaultRepository = "bholmesdev/death-by-ai-github-edition";
+const repository = process.env.GITHUB_REPOSITORY || defaultRepository;
 const [owner, repo] = repository.split("/");
 const apiBase = process.env.GITHUB_API_BASE_URL || "https://api.github.com";
 const webBase = process.env.GITHUB_SERVER_URL || "https://github.com";

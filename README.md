@@ -48,7 +48,7 @@ Vercel setup:
 1. Create/import one Vercel project for this repo.
 2. Ensure install uses `pnpm install` and build uses `pnpm build`.
 3. Add Vercel KV or Upstash Redis env: `KV_REST_API_URL`, `KV_REST_API_TOKEN`.
-4. Set env: `OZ_GITHUB_WEBHOOK_SECRET`, `CRON_SECRET`, `OZ_GITHUB_APP_ID`, `OZ_GITHUB_APP_PRIVATE_KEY`, `WARP_API_KEY`, `WARP_API_BASE_URL`, `WORKFLOW_CODE_REPOSITORY=warpdotdev-demos/death-by-ai-github-edition`.
+4. Set env: `OZ_GITHUB_WEBHOOK_SECRET`, `CRON_SECRET`, `OZ_GITHUB_APP_ID`, `OZ_GITHUB_APP_PRIVATE_KEY`, `WARP_API_KEY`, `WARP_API_BASE_URL`, `GITHUB_REPOSITORY=bholmesdev/death-by-ai-github-edition`.
 5. Install the GitHub App on this repo with Issues read/write and Metadata read.
 6. Set the GitHub App webhook URL to `https://<project>.vercel.app/api/webhook`, content type JSON, secret = `OZ_GITHUB_WEBHOOK_SECRET`, event = Issues.
 7. Verify `/api/webhook` responds 200 to GET, `/api/cron` is protected by `CRON_SECRET`, and an issue webhook delivery returns 202.

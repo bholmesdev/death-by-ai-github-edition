@@ -12,7 +12,7 @@ const sampleResponses: ResponseVerdict[] = [
     avatarUrl: "https://github.com/identicons/ben.png",
     body: "As the mine collapses around Ben, they deliberately choose to end their life in the chaos, refusing to seek escape.\n\n( 💀 Ben died )",
     responseText: "I lie down and let the rocks take me. There's no point fighting it.",
-    issueUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/101",
+    issueUrl: "https://github.com/bholmesdev/death-by-ai-github-edition/issues/101",
     verdict: "died",
     arrivedAt: Date.now() - 30_000,
   },
@@ -24,7 +24,7 @@ const sampleResponses: ResponseVerdict[] = [
     avatarUrl: "https://github.com/identicons/sasha.png",
     body: "Sasha calmly digs upward, following the faint trickle of cool air, until daylight breaks through.\n\n( ✨ Sasha survived )",
     responseText: "I feel for a draft of cool air and dig steadily toward it until I reach the surface.",
-    issueUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/102",
+    issueUrl: "https://github.com/bholmesdev/death-by-ai-github-edition/issues/102",
     verdict: "survived",
     arrivedAt: Date.now() - 25_000,
   },
@@ -36,7 +36,7 @@ const sampleResponses: ResponseVerdict[] = [
     avatarUrl: "https://github.com/identicons/priya.png",
     body: "Priya negotiates with the falling rocks. They do not negotiate.\n\n( 💀 Priya died )",
     responseText: "I calmly explain to the rocks why they should stop falling.",
-    issueUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/103",
+    issueUrl: "https://github.com/bholmesdev/death-by-ai-github-edition/issues/103",
     verdict: "died",
     arrivedAt: Date.now() - 20_000,
   },
@@ -48,7 +48,7 @@ const sampleResponses: ResponseVerdict[] = [
     avatarUrl: "https://github.com/identicons/marcus.png",
     body: "Marcus radios the rescue team, then settles in to wait. They arrive in time.\n\n( ✨ Marcus survived )",
     responseText: "I radio the surface team with my location, ration my water, and wait calmly for rescue.",
-    issueUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/104",
+    issueUrl: "https://github.com/bholmesdev/death-by-ai-github-edition/issues/104",
     verdict: "survived",
     arrivedAt: Date.now() - 15_000,
   },
@@ -68,7 +68,7 @@ const base: GameSnapshot = {
   scores: [],
   joinUrl: null,
   suggestPromptUrl: "https://github.com/owner/repo/issues/new",
-  repoUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition",
+  repoUrl: "https://github.com/bholmesdev/death-by-ai-github-edition",
   submittedResponses: [],
   urlState: "",
 };
@@ -92,7 +92,7 @@ export function getDemoSnapshot(phase: string): GameSnapshot {
       roundNumber: 1,
       currentScenario: scenario,
       submissionEndsAt: Date.now() + 59_000,
-      joinUrl: "https://github.com/warpdotdev-demos/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A&body=responds-to%3A+%2342",
+      joinUrl: "https://github.com/bholmesdev/death-by-ai-github-edition/issues/new?template=response.yml&labels=game%3Aresponse&title=Response%3A&body=responds-to%3A+%2342",
     };
   }
 

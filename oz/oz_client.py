@@ -201,7 +201,7 @@ def _resolve_skill_location(skill_name: str) -> tuple[str, str, Path]:
     skill_path = _normalize_skill_path(skill_name)
     workflow_repo_root = _workflow_code_root()
     workflow_repo_slug = (
-        optional_env("WORKFLOW_CODE_REPOSITORY")
+        optional_env("GITHUB_REPOSITORY")
         or _DEFAULT_WORKFLOW_CODE_REPOSITORY
     )
     candidate_path = workflow_repo_root / skill_path

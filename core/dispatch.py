@@ -41,17 +41,17 @@ WORKFLOW_ROLES: Mapping[str, str] = {}
 # ``warpdotdev/oz-for-oss`` so its bundled skills (``review-pr``,
 # ``implement-issue``, ``verify-pr``, ``triage-issue``, etc.) are
 # resolvable against that repo by default. Forks can override the
-# default by setting ``WORKFLOW_CODE_REPOSITORY=owner/repo`` in the
+# default by setting ``GITHUB_REPOSITORY=owner/repo`` in the
 # Vercel environment so their fork's bundled skills are used instead.
 # Repo-local override skills (e.g. ``review-pr-local``) live in the
 # consuming repo and are referenced inside the prompt body, not via
 # this skill spec.
-_DEFAULT_WORKFLOW_CODE_REPOSITORY = "warpdotdev-demos/death-by-ai-github-edition"
+_DEFAULT_WORKFLOW_CODE_REPOSITORY = "bholmesdev/death-by-ai-github-edition"
 
 
 def _resolve_workflow_code_repo() -> str:
     """Return the configured workflow-code repo slug (defaults to oz-for-oss)."""
-    raw = os.environ.get("WORKFLOW_CODE_REPOSITORY", "").strip()
+    raw = os.environ.get("GITHUB_REPOSITORY", "").strip()
     if raw and "/" in raw:
         return raw
     return _DEFAULT_WORKFLOW_CODE_REPOSITORY
@@ -63,7 +63,7 @@ def cloud_skill_spec(skill_name: str, *, workflow_repo: str | None = None) -> st
     Pass-through when *skill_name* already contains a ``:`` separator.
     Otherwise: normalize the bare name into
     ``.agents/skills/<name>/SKILL.md`` and prepend the workflow-code
-    repo (``WORKFLOW_CODE_REPOSITORY`` env override or
+    repo (``GITHUB_REPOSITORY`` env override or
     ``warpdotdev/oz-for-oss`` by default).
 
     The Oz API rejects bare skill names with
