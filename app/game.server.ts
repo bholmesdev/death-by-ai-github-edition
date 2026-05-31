@@ -74,6 +74,7 @@ type UrlGameState = {
   currentScenario: Scenario | null;
   scenarioDeck: Scenario[];
   usedScenarioNumbers: number[];
+  recentlyShuffled: number[];
   submissionEndsAt: number | null;
   submissionDurationSeconds: number;
   reveal: RevealState;
@@ -86,6 +87,9 @@ type GameState = {
   roundNumber: number;
   currentScenario: Scenario | null;
   usedScenarioNumbers: Set<number>;
+  // Scenario numbers already shown in the current shuffle cycle, so a press never
+  // lands back on something seen recently until every available scenario is exhausted.
+  recentlyShuffled: Set<number>;
   scenarioDeck: Scenario[];
   scenarioDeckIndex: number;
   submissionEndsAt: number | null;
@@ -101,6 +105,7 @@ const state: GameState = {
   roundNumber: 0,
   currentScenario: null,
   usedScenarioNumbers: new Set(),
+  recentlyShuffled: new Set(),
   scenarioDeck: [],
   scenarioDeckIndex: 0,
   submissionEndsAt: null,
@@ -167,6 +172,7 @@ export function hydrateGameState(encoded: string | null) {
     state.scenarioDeck = parsed.scenarioDeck;
     state.scenarioDeckIndex = 0;
     state.usedScenarioNumbers = new Set(parsed.usedScenarioNumbers);
+    state.recentlyShuffled = new Set(parsed.recentlyShuffled ?? []);
     state.submissionEndsAt = parsed.submissionEndsAt;
     state.submissionDurationSeconds = parsed.submissionDurationSeconds;
     state.reveal = parsed.reveal;
@@ -185,6 +191,7 @@ export function encodeGameState() {
     currentScenario: state.currentScenario,
     scenarioDeck: state.scenarioDeck,
     usedScenarioNumbers: [...state.usedScenarioNumbers],
+    recentlyShuffled: [...state.recentlyShuffled],
     submissionEndsAt: state.submissionEndsAt,
     submissionDurationSeconds: state.submissionDurationSeconds,
     reveal: state.reveal,
@@ -237,6 +244,7 @@ export async function startGame() {
   state.scoredResponseIds.clear();
   state.scoresByPlayer.clear();
   state.usedScenarioNumbers.clear();
+  state.recentlyShuffled.clear();
   state.scenarioDeck = [];
   state.scenarioDeckIndex = 0;
   state.currentScenario = await pickScenario(state.usedScenarioNumbers);
@@ -271,8 +279,31 @@ export async function shuffleScenario() {
   state.scenarioDeck = buildScenarioDeck(scenarios);
   state.scenarioDeckIndex = 0;
 
-  const next = nextScenarioFromDeck(state.usedScenarioNumbers, state.currentScenario?.number);
-  if (next) state.currentScenario = next;
+  // Remember the scenario currently on screen so a press never lands back on it.
+  if (state.currentScenario) state.recentlyShuffled.add(state.currentScenario.number);
+
+  // Skip anything already played or shown earlier in this shuffle cycle, so every
+  // available scenario appears once before we allow any repeats.
+  let next = nextScenarioFromDeck(
+    new Set([...state.usedScenarioNumbers, ...state.recentlyShuffled]),
+  );
+
+  // Once every available scenario has been shown, start a fresh cycle but keep the
+  // on-screen scenario excluded so the press still changes what's displayed.
+  if (!next) {
+    state.recentlyShuffled = new Set(
+      state.currentScenario ? [state.currentScenario.number] : [],
+    );
+    state.scenarioDeckIndex = 0;
+    next = nextScenarioFromDeck(
+      new Set([...state.usedScenarioNumbers, ...state.recentlyShuffled]),
+    );
+  }
+
+  if (next) {
+    state.currentScenario = next;
+    state.recentlyShuffled.add(next.number);
+  }
 }
 
 export function selectResponse(id: string) {
@@ -306,6 +337,9 @@ export async function nextRound() {
   await scoreCurrentRound();
   state.roundNumber += 1;
   state.phase = "confirming";
+  // Browsing history is per confirming phase; clear it so scenarios skipped while
+  // shuffling last round become selectable again this round.
+  state.recentlyShuffled.clear();
   state.currentScenario = await pickScenario(state.usedScenarioNumbers);
   resetRoundState();
 }
