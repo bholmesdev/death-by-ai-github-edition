@@ -24,7 +24,7 @@ If the response fails moderation, do NOT write a survival verdict — write the 
 ## Verdict rules (only when the response passes moderation)
 - Use the player display name supplied by the workflow, derived from GitHub profile name then login.
 - Read the linked scenario from the `responds-to: #N` issue.
-- Write EXACTLY two sentences in a cinematic-warm tone using the player's first name.
+- Write EXACTLY three sentences in a cinematic-warm tone using the player's first name.
 - Be dramatic, not snarky.
 - Calibrate around 50% survival.
 - End with one standalone footer line:
